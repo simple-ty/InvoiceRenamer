@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller 构建产物
+build/
+dist/
+
+# 测试数据（含真实发票，隐私保护）
+Test_Invoice/
+
+# 备份
+backup/
+*.tar.gz
+
+# IDE 配置
+.vscode/
+
+# WorkBuddy 工作区（私人记忆，不上传）
+.workbuddy/
+
+# 日志与临时文件
+*.log
+*.tmp
