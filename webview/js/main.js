@@ -137,7 +137,6 @@ function bindEvents() {
   $("save-settings-btn").addEventListener("click", saveCloudSettings);
   $("clear-key-btn").addEventListener("click", clearCloudSettings);
   $("verify-key-btn").addEventListener("click", verifyCloudSettings);
-  $("toggle-key-btn").addEventListener("click", toggleSecretKeyVisibility);
   $("get-key-link").addEventListener("click", (e) => {
     e.preventDefault();
     apiPost("open_browser", { url: "https://console.cloud.tencent.com/cam/capi" });
@@ -445,13 +444,6 @@ function updateSwitchState() {
   const input = $("cloud-enable-input");
   input.disabled = !sid || !skey;
   if (!sid || !skey) input.checked = false;
-}
-
-function toggleSecretKeyVisibility() {
-  const input = $("secret-key-input");
-  const btn = $("toggle-key-btn");
-  if (input.type === "password") { input.type = "text"; btn.textContent = "隐藏"; }
-  else { input.type = "password"; btn.textContent = "显示"; }
 }
 
 // ── Python 事件处理 ─────────────────────────────────────────────────────

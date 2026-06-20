@@ -739,7 +739,8 @@ button, input {
 }
 
 .settings-modal {
-  height: 460px;
+  height: auto;
+  max-height: 90vh;
 }
 
 .modal-body {
