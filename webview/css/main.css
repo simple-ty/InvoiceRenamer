@@ -915,6 +915,7 @@ button, input {
   border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 2px;
+  position: relative;
 }
 .secret-input-wrapper:focus-within {
   border-color: var(--sky);
@@ -925,6 +926,42 @@ button, input {
   border: none !important;
   border-radius: 0 !important;
   margin-bottom: 0 !important;
+  padding-right: 40px;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.eye-btn:hover .eye-icon path {
+  fill: var(--text-primary);
+}
+
+.verify-result {
+  font-size: var(--font-hint);
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s;
+  margin-left: 4px;
+}
+.verify-result.show {
+  opacity: 1;
+}
+.verify-result.valid {
+  color: var(--primary);
+}
+.verify-result.invalid {
+  color: var(--danger);
 }
 
 .toggle-text-btn {

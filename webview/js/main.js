@@ -137,6 +137,7 @@ function bindEvents() {
   $("save-settings-btn").addEventListener("click", saveCloudSettings);
   $("clear-key-btn").addEventListener("click", clearCloudSettings);
   $("verify-key-btn").addEventListener("click", verifyCloudSettings);
+  $("eye-btn").addEventListener("click", toggleSecretKeyVisibility);
   $("get-key-link").addEventListener("click", (e) => {
     e.preventDefault();
     apiPost("open_browser", { url: "https://console.cloud.tencent.com/cam/capi" });
@@ -411,9 +412,35 @@ async function clearCloudSettings() {
 async function verifyCloudSettings() {
   const sid = $("secret-id-input").value.trim();
   const skey = $("secret-key-input").value.trim();
-  if (!sid || !skey) { alert("请先输入 SecretId 和 SecretKey"); return; }
+  if (!sid || !skey) { showVerifyResult(false, "请先输入密钥"); return; }
+  $("verify-key-btn").disabled = true;
+  $("verify-key-btn").textContent = "验证中...";
   const result = await apiPost("verify_cloud_credentials", { secret_id: sid, secret_key: skey });
-  alert(result?.message || "验证结果未知");
+  $("verify-key-btn").disabled = false;
+  $("verify-key-btn").textContent = "验证密钥";
+  showVerifyResult(result && result.ok, result ? result.message : "验证失败");
+}
+
+function showVerifyResult(valid, message) {
+  const el = $("verify-result");
+  el.textContent = valid ? "密钥有效" : (message || "密钥无效");
+  el.className = "verify-result show " + (valid ? "valid" : "invalid");
+  setTimeout(() => { el.className = "verify-result"; }, 3000);
+}
+
+function toggleSecretKeyVisibility() {
+  const input = $("secret-key-input");
+  const openIcon = document.querySelector(".eye-open");
+  const closedIcon = document.querySelector(".eye-closed");
+  if (input.type === "password") {
+    input.type = "text";
+    openIcon.style.display = "none";
+    closedIcon.style.display = "block";
+  } else {
+    input.type = "password";
+    openIcon.style.display = "block";
+    closedIcon.style.display = "none";
+  }
 }
 
 async function toggleCloudEnabled() {
