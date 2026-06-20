@@ -1,3 +1,4 @@
 pdfplumber>=0.11.0
-customtkinter>=5.2.0
 openpyxl>=3.1.0
+customtkinter>=5.2.0
+pywebview>=5.0
