@@ -292,8 +292,35 @@ class App:
 
     # ── 模板面板 ────────────────────────────────────────────────────────
 
+    def _create_gear_icon(self) -> ctk.CTkImage:
+        """生成一个齿轮图标（16x16 像素）。"""
+        try:
+            from PIL import Image, ImageDraw
+            size = 16
+            img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            cx, cy, r = 8, 8, 6
+            # 外圈：带齿的圆
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=(255, 255, 255), width=2)
+            # 内圈：圆心小圆
+            draw.ellipse([cx - 2, cy - 2, cx + 2, cy + 2], fill=(255, 255, 255))
+            # 四个齿
+            for angle in [0, 45, 90, 135, 180, 225, 270, 315]:
+                import math
+                rad = math.radians(angle)
+                x1 = cx + (r - 1) * math.cos(rad)
+                y1 = cy + (r - 1) * math.sin(rad)
+                x2 = cx + (r + 3) * math.cos(rad)
+                y2 = cy + (r + 3) * math.sin(rad)
+                draw.line([x1, y1, x2, y2], fill=(255, 255, 255), width=2)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=(16, 16))
+        except Exception:
+            return None
+
     def build_template_panel(self) -> None:
         pnl = self.template_panel
+
+        # 标题
         ctk.CTkLabel(
             pnl, text="命名模板", font=self.font_section, text_color="#191919"
         ).pack(anchor="w", padx=12, pady=(12, 2))
@@ -304,16 +331,20 @@ class App:
             justify="left", wraplength=214,
         ).pack(anchor="w", padx=12)
 
+        # 中间内容区（撑开剩余空间）
+        middle_frame = ctk.CTkFrame(pnl, fg_color="transparent")
+        middle_frame.pack(fill="both", expand=True, padx=0, pady=0)
+
         self.template_rows_frame = ctk.CTkScrollableFrame(
-            pnl, fg_color="#F7F7F7", corner_radius=6, border_width=0, height=266,
+            middle_frame, fg_color="#F7F7F7", corner_radius=6, border_width=0, height=266,
         )
-        self.template_rows_frame.pack(fill="x", expand=False, padx=10, pady=(8, 8))
+        self.template_rows_frame.pack(fill="x", expand=False, padx=10, pady=(8, 4))
         self.template_rows_frame.bind("<Configure>", self.update_template_scrollbar_visibility, add="+")
         self.template_rows_frame._parent_canvas.bind("<Configure>", self.update_template_scrollbar_visibility, add="+")
 
         # 自定义字段输入
-        custom_box = ctk.CTkFrame(pnl, fg_color="#F7F7F7", corner_radius=6)
-        custom_box.pack(fill="x", padx=10, pady=(0, 8))
+        custom_box = ctk.CTkFrame(middle_frame, fg_color="#F7F7F7", corner_radius=6)
+        custom_box.pack(fill="x", padx=10, pady=(0, 0))
         ctk.CTkLabel(
             custom_box, text="自定义字段内容", font=self.font_body, text_color="#191919"
         ).pack(anchor="w", padx=10, pady=(8, 4))
@@ -331,21 +362,25 @@ class App:
             justify="left", wraplength=210,
         ).pack(anchor="w", padx=10, pady=(0, 8))
 
-        # 云端 OCR 设置入口
+        # 底部：云端 OCR 设置按钮（固定贴底）
+        btn_frame = ctk.CTkFrame(pnl, fg_color="transparent")
+        btn_frame.pack(fill="x", side="bottom", padx=10, pady=(0, 8))
+
+        gear_icon = self._create_gear_icon()
         self._cloud_ocr_btn = ctk.CTkButton(
-            pnl,
-            text="⚙  云端 OCR 识别设置",
+            btn_frame,
+            text=" 云端 OCR 识别设置",
+            image=gear_icon,
+            compound="left",
             font=self.font_button,
-            fg_color="#FFFFFF",
-            text_color="#191919",
-            hover_color="#F0F0F0",
-            border_width=1,
-            border_color="#D0D0D0",
+            fg_color="#07C160",
+            text_color="#FFFFFF",
+            hover_color="#06AD56",
             corner_radius=6,
             height=36,
             command=self._open_cloud_ocr_settings,
         )
-        self._cloud_ocr_btn.pack(fill="x", padx=10, pady=(0, 8))
+        self._cloud_ocr_btn.pack(fill="x")
 
     def refresh_template_panel(self) -> None:
         """刷新命名模板面板，支持拖拽排序。"""
