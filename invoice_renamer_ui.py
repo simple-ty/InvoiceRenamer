@@ -148,9 +148,15 @@ class App:
         self.font_subtitle = ctk.CTkFont(family=yahei, size=13)
         self.font_section = ctk.CTkFont(family=yahei, size=15, weight="bold")
         self.font_card_value = ctk.CTkFont(family=yahei, size=18, weight="bold")
-        self.font_body = ctk.CTkFont(family=yahei, size=12)
+        self.font_container = ctk.CTkFont(family=yahei, size=12)
         self.font_button = ctk.CTkFont(family=yahei, size=12, weight="bold")
         self.font_small = ctk.CTkFont(family=yahei, size=10)
+        # 弹窗/卡片专用字体（字号稍大，阅读更舒适）
+        self.font_body = ctk.CTkFont(family=yahei, size=14)
+        self.font_hint = ctk.CTkFont(family=yahei, size=12)
+
+        # 云端 OCR 图标：固定天蓝色，不随状态变化
+        self._cloud_icon = self._create_cloud_icon("#3FA9F5", 30)
 
     def _set_icon(self) -> None:
         try:
@@ -246,7 +252,7 @@ class App:
             width=250,
             height=32,
             corner_radius=6,
-            font=self.font_body,
+            font=self.font_container,
             fg_color="#FFFFFF",
             border_color="#E5E5E5",
         )
@@ -282,7 +288,7 @@ class App:
             chip.grid_propagate(False)
             ctk.CTkLabel(
                 chip, text=STAT_CARD_STYLE[key]["title"],
-                font=self.font_body, text_color="#4C4C4C",
+                font=self.font_container, text_color="#4C4C4C",
             ).pack(side="left", padx=(8, 4), pady=5)
             ctk.CTkLabel(
                 chip, textvariable=self.stats_vars[key],
@@ -292,21 +298,73 @@ class App:
 
     # ── 模板面板 ────────────────────────────────────────────────────────
 
-    def _create_gear_icon(self) -> ctk.CTkImage:
-        """生成一个设置图标（16x16 像素，白色圆圈+十字线）。"""
+    def _create_cloud_icon(self, color: str = "#07C160", size: int = 20) -> ctk.CTkImage:
+        """生成一个实心 iCloud 风格云朵图标。"""
         try:
             from PIL import Image, ImageDraw
-            import math
-            size = 16
+
+            def _bezier3(p0, p1, p2, p3, t):
+                u = 1 - t
+                return (
+                    u**3 * p0[0] + 3 * u**2 * t * p1[0] + 3 * u * t**2 * p2[0] + t**3 * p3[0],
+                    u**3 * p0[1] + 3 * u**2 * t * p1[1] + 3 * u * t**2 * p2[1] + t**3 * p3[1],
+                )
+
+            # iCloud 风格云朵轮廓（viewBox 80x54）
+            segments = [
+                ("M", (55.0, 46.0)),
+                ("H", (20.0, 46.0)),
+                ("C", (9.5, 46.0), (2.0, 38.5), (2.0, 30.0)),
+                ("C", (2.0, 22.5), (7.5, 16.5), (15.0, 16.0)),
+                ("C", (16.5, 8.5), (23.5, 3.0), (32.0, 3.0)),
+                ("C", (39.0, 3.0), (45.0, 7.0), (47.5, 13.0)),
+                ("C", (50.0, 12.0), (53.0, 11.0), (56.0, 11.0)),
+                ("C", (66.5, 11.0), (74.0, 19.0), (74.0, 29.0)),
+                ("C", (74.0, 38.5), (66.5, 46.0), (55.0, 46.0)),
+            ]
+
+            points = []
+            current = None
+            for seg in segments:
+                cmd = seg[0]
+                if cmd == "M":
+                    current = seg[1]
+                    points.append(current)
+                elif cmd == "H":
+                    # 水平线也按曲线处理以保持圆滑：用当前点和终点构造一个退化三次贝塞尔
+                    p0, p3 = current, (seg[1][0], current[1])
+                    p1 = (p0[0] * 0.67 + p3[0] * 0.33, p0[1])
+                    p2 = (p0[0] * 0.33 + p3[0] * 0.67, p3[1])
+                    for i in range(1, 21):
+                        pt = _bezier3(p0, p1, p2, p3, i / 20.0)
+                        points.append(pt)
+                    current = p3
+                elif cmd == "C":
+                    p0 = current
+                    p1, p2, p3 = seg[1], seg[2], seg[3]
+                    for i in range(1, 21):
+                        pt = _bezier3(p0, p1, p2, p3, i / 20.0)
+                        points.append(pt)
+                    current = p3
+
+            # 缩放并居中到 size x size 画布
+            xs = [p[0] for p in points]
+            ys = [p[1] for p in points]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            scale = min((size - 2) / (max_x - min_x), (size - 2) / (max_y - min_y))
+            off_x = (size - (max_x - min_x) * scale) / 2
+            off_y = (size - (max_y - min_y) * scale) / 2
+            scaled = [
+                (off_x + (p[0] - min_x) * scale, off_y + (p[1] - min_y) * scale)
+                for p in points
+            ]
+
             img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-            cx, cy = 8, 8
-            # 外圈
-            draw.ellipse([cx - 5, cy - 5, cx + 5, cy + 5], outline=(255, 255, 255), width=2)
-            # 十字线
-            for dx, dy in [(4, 0), (-4, 0), (0, 4), (0, -4)]:
-                draw.line([cx, cy, cx + dx, cy + dy], fill=(255, 255, 255), width=2)
-            return ctk.CTkImage(light_image=img, dark_image=img, size=(16, 16))
+            c = tuple(int(color[i:i + 2], 16) for i in (1, 3, 5)) + (255,)
+            draw.polygon(scaled, fill=c)
+            return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
         except Exception:
             return None
 
@@ -339,13 +397,13 @@ class App:
         custom_box = ctk.CTkFrame(middle_frame, fg_color="#F7F7F7", corner_radius=6)
         custom_box.pack(fill="x", padx=10, pady=(0, 0))
         ctk.CTkLabel(
-            custom_box, text="自定义字段内容", font=self.font_body, text_color="#191919"
+            custom_box, text="自定义字段内容", font=self.font_container, text_color="#191919"
         ).pack(anchor="w", padx=10, pady=(8, 4))
         self.custom_entry = ctk.CTkEntry(
             custom_box, textvariable=self.custom_value_var,
             placeholder_text="例如：项目A / 2026Q2 报销",
             height=32, corner_radius=6,
-            font=self.font_body, fg_color="#FFFFFF", border_color="#E5E5E5",
+            font=self.font_container, fg_color="#FFFFFF", border_color="#E5E5E5",
         )
         self.custom_entry.pack(fill="x", padx=10, pady=(0, 5))
         ctk.CTkLabel(
@@ -355,31 +413,75 @@ class App:
             justify="left", wraplength=210,
         ).pack(anchor="w", padx=10, pady=(0, 8))
 
-        # 底部：云端 OCR 设置按钮（固定贴底）
-        btn_frame = ctk.CTkFrame(pnl, fg_color="transparent")
-        btn_frame.pack(fill="x", side="bottom", padx=10, pady=(0, 8))
-
-        # 状态指示灯
-        self._cloud_status_dot = ctk.CTkLabel(
-            btn_frame, text="●", font=self.font_small,
-            text_color="white", anchor="w", width=8,
+        # 底部：云端 OCR 设置入口（整行可点击、整行悬浮）
+        cloud_row = ctk.CTkFrame(
+            pnl, fg_color="#FFFFFF", corner_radius=8,
+            border_width=1, border_color="#E5E5E5", height=54,
         )
+        cloud_row.pack(fill="x", side="bottom", padx=10, pady=(0, 8))
+        cloud_row.pack_propagate(False)
+        cloud_row.configure(cursor="hand2")
 
-        gear_icon = self._create_gear_icon()
-        self._cloud_ocr_btn = ctk.CTkButton(
-            btn_frame,
-            text="云端 OCR 识别设置",
-            image=gear_icon,
+        self._cloud_hover = False
+
+        def _on_cloud_enter(_):
+            self._cloud_hover = True
+            cloud_row.configure(fg_color="#F2F7F2")
+        def _on_cloud_leave(_):
+            self._cloud_hover = False
+            cloud_row.after(10, lambda: _check_cloud_leave())
+        def _check_cloud_leave():
+            if not self._cloud_hover:
+                cloud_row.configure(fg_color="#FFFFFF")
+
+        cloud_row.bind("<Enter>", _on_cloud_enter)
+        cloud_row.bind("<Leave>", _on_cloud_leave)
+
+        def _open_cloud_settings(_=None):
+            self._open_cloud_ocr_settings()
+        cloud_row.bind("<Button-1>", _open_cloud_settings)
+
+        # 左侧图标 + 文字
+        self._cloud_ocr_btn = ctk.CTkLabel(
+            cloud_row,
+            text="  云端识别设置",
+            image=self._cloud_icon,
             compound="left",
-            font=self.font_button,
-            fg_color="#07C160",
-            text_color="#FFFFFF",
-            hover_color="#06AD56",
-            corner_radius=6,
-            height=36,
-            command=self._open_cloud_ocr_settings,
+            font=self.font_body,
+            text_color="#191919",
         )
-        self._cloud_ocr_btn.pack(fill="x")
+        self._cloud_ocr_btn.pack(side="left", padx=(10, 0))
+        self._cloud_ocr_btn.bind("<Button-1>", _open_cloud_settings)
+        self._cloud_ocr_btn.bind("<Enter>", _on_cloud_enter)
+        self._cloud_ocr_btn.bind("<Leave>", _on_cloud_leave)
+
+        # 右侧状态按钮：已配置时可点击切换开关，未配置时显示红色● 未配置
+        def _toggle_cloud_state():
+            if not self._has_cloud_creds():
+                return
+            self._cloud_ocr_enabled = not self._cloud_ocr_enabled
+            from cloud_ocr import save_credentials
+            save_credentials(self._cloud_secret_id, self._cloud_secret_key, enabled=self._cloud_ocr_enabled)
+            self._update_cloud_status_dot()
+            self.update_rename_button_state()
+
+        self._cloud_status_btn = ctk.CTkButton(
+            cloud_row,
+            text="● 未配置",
+            font=self.font_hint,
+            text_color="#FA5151",
+            fg_color="#FCEBEB",
+            hover_color="#FCEBEB",
+            corner_radius=10,
+            width=76,
+            height=24,
+            cursor="arrow",
+            command=_toggle_cloud_state,
+        )
+        self._cloud_status_btn.pack(side="right", padx=(0, 12))
+        self._cloud_status_btn.bind("<Enter>", _on_cloud_enter)
+        self._cloud_status_btn.bind("<Leave>", _on_cloud_leave)
+
         self._update_cloud_status_dot()
 
     def refresh_template_panel(self) -> None:
@@ -415,7 +517,7 @@ class App:
             text_frame.pack(side="left", fill="x", expand=True, padx=(6, 4), pady=3)
             ctk.CTkLabel(
                 text_frame, text=FIELD_LABELS[key],
-                font=self.font_body, text_color="#191919",
+                font=self.font_container, text_color="#191919",
             ).pack(anchor="w")
 
             # 拖拽手柄放在右侧，用三道横线图标
@@ -636,7 +738,7 @@ class App:
             variable=self.preview_mode_var,
             onvalue=True, offvalue=False,
             command=self.update_rename_button_state,
-            font=self.font_body, text_color="#191919",
+            font=self.font_container, text_color="#191919",
             progress_color="#07C160",
             button_color="#FFFFFF", button_hover_color="#F7F7F7",
         )
@@ -649,14 +751,14 @@ class App:
             action_group, text="重新识别", command=self.scan_files,
             width=92, height=32, corner_radius=6,
             fg_color="#F2F3F5", hover_color="#EDEDED", text_color="#191919",
-            font=self.font_body,
+            font=self.font_container,
         ).pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
             action_group, text="导出 Excel", command=self.export_excel,
             width=92, height=32, corner_radius=6,
             fg_color="#F2F3F5", hover_color="#EDEDED", text_color="#191919",
-            font=self.font_body,
+            font=self.font_container,
         ).pack(side="left", padx=(0, 8))
 
         self.rename_button = ctk.CTkButton(
@@ -917,102 +1019,208 @@ class App:
         self._update_cloud_status_dot()
 
     def _update_cloud_status_dot(self) -> None:
-        """更新云端 OCR 状态指示灯。"""
-        if hasattr(self, "_cloud_status_dot"):
-            if self._cloud_ocr_enabled and self._has_cloud_creds():
-                self._cloud_status_dot.configure(text_color="white")
-            else:
-                self._cloud_status_dot.configure(text_color=("#4CAF50", "#888888"))
+        """更新云端 OCR 状态按钮外观与点击行为。"""
+        if not hasattr(self, "_cloud_status_btn"):
+            return
+        has_creds = self._has_cloud_creds()
+        if not has_creds:
+            self._cloud_status_btn.configure(
+                text="● 未配置",
+                text_color="#FA5151",
+                fg_color="#FCEBEB",
+                hover_color="#FCEBEB",
+                cursor="arrow",
+            )
+            return
+
+        if self._cloud_ocr_enabled:
+            self._cloud_status_btn.configure(
+                text="● 已启用",
+                text_color="#3FA9F5",
+                fg_color="#E8F4FD",
+                hover_color="#D6EAF8",
+                cursor="hand2",
+            )
+        else:
+            self._cloud_status_btn.configure(
+                text="● 未启用",
+                text_color="#8A8A8A",
+                fg_color="#F2F3F5",
+                hover_color="#E5E5E5",
+                cursor="hand2",
+            )
 
     def _has_cloud_creds(self) -> bool:
         return bool(self._cloud_secret_id and self._cloud_secret_key)
 
     def _open_cloud_ocr_settings(self) -> None:
-        """弹出云端 OCR 设置窗口。"""
+        """弹出云端 OCR 设置窗口（开关置顶、单卡片、底部按钮固定）。"""
         from cloud_ocr import (
             save_credentials, clear_credentials,
             validate_credentials, get_usage_stats,
         )
 
         top = ctk.CTkToplevel(self.root)
-        top.title("云端 OCR 设置")
-        top.geometry("460x370")
+        top.title("云端 OCR 识别设置")
+        top.geometry("480x460")
         top.resizable(False, False)
         top.transient(self.root)
         top.grab_set()
 
-        container = ctk.CTkFrame(top, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=0, pady=0)
+        # 主容器：浅灰背景
+        container = ctk.CTkFrame(top, fg_color="#F5F5F5")
+        container.pack(fill="both", expand=True)
 
-        # ── 内容区 ──
+        # ── 底部按钮栏（先 pack，固定占用 60px）──
+        footer = ctk.CTkFrame(container, fg_color="#FFFFFF", height=60, corner_radius=0)
+        footer.pack(fill="x", side="bottom")
+        footer.pack_propagate(False)
+
+        left_group = ctk.CTkFrame(footer, fg_color="transparent")
+        left_group.pack(side="left", padx=16, pady=14)
+
+        right_group = ctk.CTkFrame(footer, fg_color="transparent")
+        right_group.pack(side="right", padx=16, pady=14)
+
+        # ── 中间内容区（填充剩余空间）──
         body = ctk.CTkFrame(container, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=22, pady=16)
+        body.pack(fill="both", expand=True, padx=16, pady=12)
 
-        # === 第一区：API 密钥 ===
-        ctk.CTkLabel(body, text="API 密钥", anchor="w",
-                     font=self.font_section, text_color="#191919"
-                     ).pack(fill="x", pady=(0, 8))
+        # === 单一卡片：开关 + API 密钥 ===
+        card = ctk.CTkFrame(body, fg_color="#FFFFFF", corner_radius=8)
+        card.pack(fill="both", expand=True)
+
+        # 启用开关（置顶，天蓝色，56x24）
+        switch_row = ctk.CTkFrame(card, fg_color="transparent")
+        switch_row.pack(fill="x", padx=16, pady=(16, 10))
+        switch_row.grid_columnconfigure(0, weight=1)
+
+        switch_left = ctk.CTkFrame(switch_row, fg_color="transparent")
+        switch_left.grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(
+            switch_left, text="启用云端识别",
+            font=self.font_body, text_color="#191919",
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            switch_left, text="自动识别图片发票和扫描件 PDF",
+            font=self.font_hint, text_color="#5F5E5A",
+        ).pack(anchor="w")
+
+        enable_switch = ctk.CTkSwitch(
+            switch_row, text="",
+            switch_width=56, switch_height=24,
+            progress_color="#3FA9F5",
+            fg_color="#D9D9D9",
+            button_color="#FFFFFF", button_hover_color="#F7F7F7",
+        )
+        enable_switch.grid(row=0, column=1, sticky="e")
+        enable_switch.select() if self._cloud_ocr_enabled else enable_switch.deselect()
+
+        # 细分割线
+        sep = ctk.CTkFrame(card, height=1, fg_color="#E5E5E5")
+        sep.pack(fill="x", padx=16, pady=(0, 12))
+
+        # API 密钥标题行：左侧标题 + 右侧用量（两行）
+        title_row = ctk.CTkFrame(card, fg_color="transparent")
+        title_row.pack(fill="x", padx=16, pady=(0, 10))
+        title_row.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            title_row, text="API 密钥",
+            font=self.font_section, text_color="#191919",
+        ).grid(row=0, column=0, sticky="w")
+
+        usage = get_usage_stats()
+        used = usage["used"]
+        remaining = usage["remaining"]
+        limit = usage["limit"]
+        if remaining <= 0:
+            usage_color = "#FA5151"
+        elif remaining <= 100:
+            usage_color = "#FA9D3B"
+        else:
+            usage_color = "#8A8A8A"
+        usage_lbl = ctk.CTkLabel(
+            title_row,
+            text=f"本月已调用 {used} 次\n免费额度 {limit} 次/月",
+            font=self.font_hint, text_color=usage_color, anchor="e", justify="right",
+        )
+        usage_lbl.grid(row=0, column=1, sticky="e")
 
         # SecretId
-        ctk.CTkLabel(body, text="SecretId", anchor="w",
-                     font=self.font_body).pack(fill="x", pady=(0, 2))
+        ctk.CTkLabel(
+            card, text="SecretId", anchor="w",
+            font=self.font_body, text_color="#4C4C4C",
+        ).pack(fill="x", padx=16, pady=(0, 4))
+
         secret_id_entry = ctk.CTkEntry(
-            body, placeholder_text="AKIDxxxxxxxxxxxxxxxxxxxx",
-            font=self.font_body,
+            card, placeholder_text="AKIDxxxxxxxxxxxxxxxxxxxx",
+            font=self.font_body, height=36, corner_radius=6,
+            fg_color="#FFFFFF", border_color="#E5E5E5",
         )
-        secret_id_entry.pack(fill="x", pady=(0, 2))
+        secret_id_entry.pack(fill="x", padx=16, pady=(0, 2))
         secret_id_entry.insert(0, self._cloud_secret_id)
 
-        # SecretId 提示行（左提示 + 右链接）
-        sid_hint = ctk.CTkFrame(body, fg_color="transparent")
-        sid_hint.pack(fill="x", pady=(0, 8))
-        ctk.CTkLabel(sid_hint, text="从腾讯云控制台获取",
-                     font=self.font_body, text_color="#8A8A8A", anchor="w"
-                     ).pack(side="left")
+        # SecretId 提示行 + 获取链接
+        sid_hint_row = ctk.CTkFrame(card, fg_color="transparent")
+        sid_hint_row.pack(fill="x", padx=16, pady=(0, 12))
+        ctk.CTkLabel(
+            sid_hint_row, text="从腾讯云控制台 > API 密钥管理获取",
+            font=self.font_hint, text_color="#5F5E5A", anchor="w",
+        ).pack(side="left")
         link_lbl = ctk.CTkLabel(
-            sid_hint, text="前往获取 →",
-            font=self.font_button, text_color="#07C160", anchor="e",
-            cursor="hand2",
+            sid_hint_row, text="点击获取 API 密钥",
+            font=self.font_hint, text_color="#07C160", anchor="e", cursor="hand2",
         )
         link_lbl.pack(side="right")
-        link_lbl.bind("<Button-1>", lambda e: os.startfile(
-            "https://console.cloud.tencent.com/cam/capi"
-        ))
+        link_lbl.bind("<Button-1>", lambda e: os.startfile("https://console.cloud.tencent.com/cam/capi"))
 
-        # SecretKey
-        ctk.CTkLabel(body, text="SecretKey", anchor="w",
-                     font=self.font_body).pack(fill="x", pady=(0, 2))
-        secret_key_entry = ctk.CTkEntry(
-            body, placeholder_text="xxxxxxxxxxxxxxxxxxxxxxxx",
-            font=self.font_body, show="*",
+        # SecretKey + 无缝衔接的文字显示/隐藏按钮
+        ctk.CTkLabel(
+            card, text="SecretKey", anchor="w",
+            font=self.font_body, text_color="#4C4C4C",
+        ).pack(fill="x", padx=16, pady=(0, 4))
+
+        sk_row = ctk.CTkFrame(card, fg_color="transparent")
+        sk_row.pack(fill="x", padx=16, pady=(0, 2))
+        sk_row.grid_columnconfigure(0, weight=1)
+
+        sk_container = ctk.CTkFrame(
+            sk_row, height=38, corner_radius=6,
+            fg_color="#FFFFFF", border_width=1, border_color="#E5E5E5",
         )
-        secret_key_entry.pack(fill="x", pady=(0, 2))
+        sk_container.grid(row=0, column=0, sticky="ew")
+        sk_container.grid_propagate(False)
+        sk_container.grid_columnconfigure(0, weight=1)
+
+        secret_key_entry = ctk.CTkEntry(
+            sk_container, placeholder_text="xxxxxxxxxxxxxxxxxxxxxxxx",
+            font=self.font_body, height=36, border_width=0, corner_radius=0,
+            fg_color="#FFFFFF", show="*",
+        )
+        secret_key_entry.grid(row=0, column=0, sticky="ew", padx=(10, 0))
         secret_key_entry.insert(0, self._cloud_secret_key)
 
-        ctk.CTkLabel(body, text="保存时将自动加密存储，防止明文泄露",
-                     font=self.font_body, text_color="#8A8A8A", anchor="w"
-                     ).pack(fill="x", pady=(0, 10))
+        def _toggle_key_visibility():
+            if secret_key_entry.cget("show") == "*":
+                secret_key_entry.configure(show="")
+                toggle_btn.configure(text="隐藏")
+            else:
+                secret_key_entry.configure(show="*")
+                toggle_btn.configure(text="显示")
 
-        # ── 分割线 ──
-        sep = ctk.CTkFrame(body, height=1, fg_color="#E5E5E5")
-        sep.pack(fill="x", pady=(0, 12))
+        toggle_btn = ctk.CTkButton(
+            sk_container, text="显示",
+            width=50, height=36, corner_radius=6,
+            fg_color="#FFFFFF", hover_color="#F2F3F5",
+            text_color="#191919", font=self.font_hint,
+            command=_toggle_key_visibility,
+        )
+        toggle_btn.grid(row=0, column=1, sticky="e", padx=(0, 1))
 
-        # === 第二区：启用开关 + 用量 ===
-        switch_frame = ctk.CTkFrame(body, fg_color="transparent")
-        switch_frame.pack(fill="x")
-
-        switch_left = ctk.CTkFrame(switch_frame, fg_color="transparent")
-        switch_left.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(switch_left, text="启用云端识别",
-                     font=self.font_body, anchor="w"
-                     ).pack(fill="x")
-        ctk.CTkLabel(switch_left, text="自动识别图片和扫描件 PDF",
-                     font=self.font_small, text_color="#8A8A8A", anchor="w"
-                     ).pack(fill="x")
-
-        enable_switch = ctk.CTkSwitch(switch_frame, text="")
-        enable_switch.pack(side="right", padx=(10, 0))
-        enable_switch.select() if self._cloud_ocr_enabled else enable_switch.deselect()
+        ctk.CTkLabel(
+            card, text="保存时自动加密混淆，防止明文泄露",
+            font=self.font_hint, text_color="#5F5E5A", anchor="w",
+        ).pack(fill="x", padx=16, pady=(0, 4))
 
         def _update_switch(*_):
             has_both = bool(secret_id_entry.get().strip() and secret_key_entry.get().strip())
@@ -1022,37 +1230,6 @@ class App:
         secret_id_entry.bind("<KeyRelease>", _update_switch)
         secret_key_entry.bind("<KeyRelease>", _update_switch)
         _update_switch()
-
-        # 用量统计
-        usage = get_usage_stats()
-        used = usage["used"]
-        remaining = usage["remaining"]
-        limit = usage["limit"]
-        if remaining <= 0:
-            usage_text = f"本月免费额度已用尽（{used}/{limit}），次月 1 日自动重置"
-            usage_color = "#FA5151"
-        elif remaining <= 100:
-            usage_text = f"本月已调用 {used} 次（剩余约 {remaining} 次）"
-            usage_color = "#FA9D3B"
-        else:
-            usage_text = f"本月已调用 {used} 次（免费额度 {limit} 次/月）"
-            usage_color = "#8A8A8A"
-        ctk.CTkLabel(body, text=usage_text,
-                     font=self.font_body, text_color=usage_color, anchor="w"
-                     ).pack(fill="x", pady=(6, 0))
-
-        # ── 底部按钮区（浅灰底）──
-        footer = ctk.CTkFrame(container, fg_color="#F5F5F5", height=48)
-        footer.pack(fill="x", side="bottom")
-        footer.pack_propagate(False)
-
-        inner_footer = ctk.CTkFrame(footer, fg_color="transparent")
-        inner_footer.pack(fill="x", padx=18, pady=8)
-
-        left_btns = ctk.CTkFrame(inner_footer, fg_color="transparent")
-        left_btns.pack(side="left")
-        right_btns = ctk.CTkFrame(inner_footer, fg_color="transparent")
-        right_btns.pack(side="right")
 
         def _do_clear():
             secret_id_entry.delete(0, "end")
@@ -1093,24 +1270,35 @@ class App:
             self.update_rename_button_state()
             top.destroy()
 
-        ctk.CTkButton(left_btns, text="清除密钥",
-                      fg_color="#FA5151", hover_color="#D94A4A",
-                      font=self.font_body, width=80, height=30,
-                      command=_do_clear).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(left_btns, text="验证密钥",
-                      font=self.font_body, width=72, height=30,
-                      fg_color="transparent", border_width=1,
-                      text_color="#191919",
-                      command=_do_verify).pack(side="left")
+        ctk.CTkButton(
+            left_group, text="清除密钥",
+            width=80, height=36, corner_radius=6,
+            fg_color="#F2F3F5", hover_color="#EDEDED",
+            text_color="#FA5151", font=self.font_button,
+            command=_do_clear,
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            left_group, text="验证密钥",
+            width=72, height=36, corner_radius=6,
+            fg_color="#FFFFFF", border_width=1, border_color="#E5E5E5",
+            text_color="#191919", font=self.font_body,
+            command=_do_verify,
+        ).pack(side="left")
 
-        ctk.CTkButton(right_btns, text="取消",
-                      font=self.font_body, width=60, height=30,
-                      fg_color="transparent", border_width=1,
-                      text_color="#191919",
-                      command=top.destroy).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(right_btns, text="保存",
-                      font=self.font_body, width=60, height=30,
-                      command=_do_save).pack(side="left")
+        ctk.CTkButton(
+            right_group, text="取消",
+            width=60, height=36, corner_radius=6,
+            fg_color="#FFFFFF", border_width=1, border_color="#E5E5E5",
+            text_color="#191919", font=self.font_body,
+            command=top.destroy,
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            right_group, text="保存",
+            width=60, height=36, corner_radius=6,
+            fg_color="#3FA9F5", hover_color="#3498DB",
+            text_color="#FFFFFF", font=self.font_button,
+            command=_do_save,
+        ).pack(side="left")
 
     def _popup_source_menu(self) -> None:
         """点击「选择来源」按钮后弹出自定义风格化下拉菜单。

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>InvoiceRenamer 云端 OCR UI 调试页</title>
+  <style>
+    :root {
+      /* 可调变量：你可以直接改这些值 */
+      --entry-height: 54px;
+      --entry-font-size: 14px;
+      --entry-icon-size: 30px;
+      --entry-radius: 8px;
+      --entry-border-color: #E5E5E5;
+      --entry-hover-bg: #F2F7F2;
+      --entry-cloud-color: #3FA9F5;
+      --badge-font-size: 12px;
+      --badge-radius: 10px;
+
+      --dialog-width: 480px;
+      --dialog-bg: #F5F5F5;
+      --card-bg: #FFFFFF;
+      --card-radius: 8px;
+      --card-border-color: #E5E5E5;
+      --switch-width: 56px;
+      --switch-height: 24px;
+      --switch-color: #3FA9F5;
+      --input-height: 38px;
+      --input-radius: 6px;
+      --input-border-color: #E5E5E5;
+      --toggle-btn-width: 50px;
+      --toggle-btn-bg: #F2F3F5; /* 默认灰色底色，悬浮时 #EDEDED */
+      --toggle-btn-hover: #EDEDED;
+      --save-btn-bg: #3FA9F5;
+      --clear-btn-color: #FA5151;
+      --clear-btn-bg: #F2F3F5;
+      --body-font-size: 14px;
+      --hint-font-size: 12px;
+      --section-font-size: 15px;
+      --link-color: #3FA9F5;
+      --text-primary: #191919;
+      --text-secondary: #4C4C4C;
+      --text-hint: #5F5E5A;
+      --gap: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      background: #E8E8E8;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    h2 { margin: 0 0 12px; font-size: 16px; color: #333; }
+
+    /* ========== 左侧设置入口 ========== */
+    .sidebar {
+      width: 260px;
+      background: #FFFFFF;
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    .cloud-entry {
+      height: var(--entry-height);
+      border: 1px solid var(--entry-border-color);
+      border-radius: var(--entry-radius);
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .cloud-entry:hover { background: var(--entry-hover-bg); }
+    .cloud-entry svg {
+      width: var(--entry-icon-size);
+      height: var(--entry-icon-size);
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .cloud-entry .text {
+      font-size: var(--entry-font-size);
+      color: var(--text-primary);
+      flex: 1;
+    }
+    .cloud-entry .badge {
+      font-size: var(--badge-font-size);
+      padding: 4px 10px;
+      border-radius: var(--badge-radius);
+      cursor: pointer;
+    }
+    .badge.enabled { color: #3FA9F5; background: #E8F4FD; }
+    .badge.disabled { color: #8A8A8A; background: #F2F3F5; cursor: pointer; }
+    .badge.unconfigured { color: #FA5151; background: #FCEBEB; cursor: default; }
+
+    /* ========== 设置弹窗 ========== */
+    .dialog {
+      width: var(--dialog-width);
+      background: var(--dialog-bg);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .dialog-card {
+      background: var(--card-bg);
+      border-radius: var(--card-radius);
+      border: 1px solid var(--card-border-color);
+      margin: 12px;
+      padding: 16px;
+    }
+
+    .switch-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .switch-row .title { font-size: var(--body-font-size); color: var(--text-primary); font-weight: 500; margin-bottom: 2px; }
+    .switch-row .desc { font-size: var(--hint-font-size); color: var(--text-hint); }
+    .switch {
+      width: var(--switch-width);
+      height: var(--switch-height);
+      background: var(--switch-color);
+      border-radius: calc(var(--switch-height) / 2);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .switch.off { background: #D9D9D9; }
+    .switch::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      top: 2px;
+      right: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      transition: right 0.2s;
+    }
+    .switch.off::after { right: calc(var(--switch-width) - 22px); }
+
+    .divider { height: 1px; background: #E5E5E5; margin: 14px 0; }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .section-title { font-size: var(--section-font-size); color: var(--text-primary); font-weight: 500; }
+    .usage { text-align: right; font-size: var(--hint-font-size); color: var(--text-hint); line-height: 1.5; }
+
+    .field-label { font-size: var(--body-font-size); color: var(--text-secondary); margin-bottom: 6px; }
+    .input {
+      height: var(--input-height);
+      border: 1px solid var(--input-border-color);
+      border-radius: var(--input-radius);
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: var(--body-font-size);
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .hint-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .hint { font-size: var(--hint-font-size); color: var(--text-hint); }
+    .link { font-size: var(--hint-font-size); color: var(--link-color); cursor: pointer; }
+
+    /* 关键：SecretKey 无缝输入框 */
+    .sk-input {
+      height: var(--input-height);
+      border: 1px solid var(--input-border-color);
+      border-radius: var(--input-radius);
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+      overflow: hidden;
+    }
+    .sk-input input {
+      flex: 1;
+      height: calc(var(--input-height) - 2px);
+      border: none;
+      outline: none;
+      padding: 0 12px;
+      font-size: var(--body-font-size);
+      font-family: inherit;
+      color: var(--text-primary);
+    }
+    .sk-input .toggle {
+      width: var(--toggle-btn-width);
+      height: calc(var(--input-height) - 2px);
+      border: none;
+      background: var(--toggle-btn-bg);
+      font-size: var(--hint-font-size);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sk-input .toggle:hover { background: var(--toggle-btn-hover); }
+
+    .footer {
+      background: #FFFFFF;
+      border-top: 1px solid #E5E5E5;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .btn-group { display: flex; gap: 10px; }
+    .btn {
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      font-size: var(--body-font-size);
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .btn-clear { background: var(--clear-btn-bg); color: var(--clear-btn-color); font-weight: 600; }
+    .btn-verify { background: #FFFFFF; color: var(--text-primary); border-color: #E5E5E5; }
+    .btn-cancel { background: #FFFFFF; color: var(--text-primary); border-color: #E5E5E5; }
+    .btn-save { background: var(--save-btn-bg); color: #FFFFFF; }
+
+    /* ========== 可调面板 ========== */
+    .controls {
+      position: fixed;
+      right: 20px;
+      top: 20px;
+      width: 260px;
+      background: #FFFFFF;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      font-size: 13px;
+    }
+    .controls h3 { margin: 0 0 12px; font-size: 14px; }
+    .control { margin-bottom: 10px; }
+    .control label { display: block; margin-bottom: 4px; color: #555; }
+    .control input[type="color"], .control input[type="text"], .control input[type="number"] {
+      width: 100%;
+      padding: 4px;
+      border: 1px solid #DDD;
+      border-radius: 4px;
+    }
+    .note {
+      margin-top: 12px;
+      padding: 8px;
+      background: #FFFBE6;
+      border: 1px solid #FFE58F;
+      border-radius: 4px;
+      color: #666;
+      line-height: 1.5;
+    }
+    code { background: #F2F3F5; padding: 1px 4px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- 可调面板 -->
+  <div class="controls">
+    <h3>CSS 变量调试面板</h3>
+    <div class="control">
+      <label>入口高度 (px)</label>
+      <input type="number" id="entry-height" value="54" oninput="updateVar('--entry-height', this.value + 'px')">
+    </div>
+    <div class="control">
+      <label>入口文字 (px)</label>
+      <input type="number" id="entry-font-size" value="14" oninput="updateVar('--entry-font-size', this.value + 'px')">
+    </div>
+    <div class="control">
+      <label>云朵图标 (px)</label>
+      <input type="number" id="entry-icon-size" value="30" oninput="updateVar('--entry-icon-size', this.value + 'px'); updateSvgSize(this.value)">
+    </div>
+    <div class="control">
+      <label>输入框高度 (px)</label>
+      <input type="number" id="input-height" value="38" oninput="updateVar('--input-height', this.value + 'px')">
+    </div>
+    <div class="control">
+      <label>切换按钮宽度 (px)</label>
+      <input type="number" id="toggle-btn-width" value="50" oninput="updateVar('--toggle-btn-width', this.value + 'px')">
+    </div>
+    <div class="control">
+      <label>切换按钮默认底色</label>
+      <input type="text" id="toggle-btn-bg" value="#F2F3F5" oninput="updateVar('--toggle-btn-bg', this.value)">
+    </div>
+    <div class="control">
+      <label>切换按钮悬浮色</label>
+      <input type="text" id="toggle-btn-hover" value="#EDEDED" oninput="updateVar('--toggle-btn-hover', this.value)">
+    </div>
+    <div class="control">
+      <label>开关宽度 (px)</label>
+      <input type="number" id="switch-width" value="56" oninput="updateVar('--switch-width', this.value + 'px')">
+    </div>
+    <div class="control">
+      <label>开关高度 (px)</label>
+      <input type="number" id="switch-height" value="24" oninput="updateVar('--switch-height', this.value + 'px')">
+    </div>
+
+    <div class="note">
+      调好后按 <code>F12</code> 打开开发者工具，把修改后的 CSS 值截图或复制给我。我按这些参数改 Python 代码。
+    </div>
+  </div>
+
+  <!-- 左侧模拟面板 -->
+  <div>
+    <h2>左侧设置入口</h2>
+    <div class="sidebar">
+      <div class="cloud-entry" onclick="alert('打开设置弹窗')">
+        <svg class="cloud-svg" viewBox="0 0 80 54" fill="var(--entry-cloud-color)">
+          <path d="M55 46H20C9.5 46 2 38.5 2 30C2 22.5 7.5 16.5 15 16C16.5 8.5 23.5 3 32 3C39 3 45 7 47.5 13C50 12 53 11 56 11C66.5 11 74 19 74 29C74 38.5 66.5 46 55 46Z"/>
+        </svg>
+        <span class="text">云端识别设置</span>
+        <span class="badge enabled">● 已启用</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div>
+    <h2>设置弹窗</h2>
+    <div class="dialog">
+      <div class="dialog-card">
+        <div class="switch-row">
+          <div>
+            <div class="title">启用云端识别</div>
+            <div class="desc">自动识别图片发票和扫描件 PDF</div>
+          </div>
+          <div class="switch" onclick="this.classList.toggle('off')"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-header">
+          <span class="section-title">API 密钥</span>
+          <div class="usage">
+            <div>本月已调用 12 次</div>
+            <div>免费额度 1000 次/月</div>
+          </div>
+        </div>
+
+        <div class="field-label">SecretId</div>
+        <div class="input">AKIDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</div>
+        <div class="hint-row">
+          <span class="hint">从腾讯云控制台 > API 密钥管理获取</span>
+          <span class="link">点击获取API密钥 →</span>
+        </div>
+
+        <div class="field-label">SecretKey</div>
+        <div class="sk-input">
+          <input type="password" value="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+          <button class="toggle" onclick="toggleVisibility(this)">显示</button>
+        </div>
+        <div class="hint" style="margin-bottom: 14px;">保存时自动加密混淆，防止明文泄露</div>
+      </div>
+
+      <div class="footer">
+        <div class="btn-group">
+          <button class="btn btn-clear">清除密钥</button>
+          <button class="btn btn-verify">验证密钥</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-cancel">取消</button>
+          <button class="btn btn-save">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function updateVar(name, value) {
+      document.documentElement.style.setProperty(name, value);
+    }
+    function updateSvgSize(size) {
+      document.querySelectorAll('.cloud-svg').forEach(svg => {
+        svg.style.width = size + 'px';
+        svg.style.height = size + 'px';
+      });
+    }
+    function toggleVisibility(btn) {
+      const input = btn.previousElementSibling;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '隐藏';
+      } else {
+        input.type = 'password';
+        btn.textContent = '显示';
+      }
+    }
+  </script>
+
+</body>
+</html>
