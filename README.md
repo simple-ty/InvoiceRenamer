@@ -17,7 +17,8 @@
 
 ## 界面预览
 
-![主界面](docs/screenshot_main.png)
+![主界面](docs/软件初始化.png)
+![云端识别设置](docs/配置云端设置.png)
 
 ## 快速开始
 
