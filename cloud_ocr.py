@@ -243,16 +243,21 @@ def _build_signature(
 # ── 发票识别 API ──────────────────────────────────────────────────────────
 
 def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
-    """调用腾讯云增值税发票识别 API，返回结构化字段。
+    """识别发票图片或 PDF，自动根据文件类型选择对应 API。
 
-    Args:
-        image_path: 图片文件路径
-        secret_id: 腾讯云 API SecretId
-        secret_key: 腾讯云 API SecretKey
+    图片 → VatInvoiceOCR
+    PDF  → RecognizeGeneralInvoice（支持 PDF 多页）
 
-    Returns:
-        包含 fields 的字典，出错时包含 _error 键。
+    返回统一格式的字段字典，出错时包含 _error 键。
     """
+    ext = os.path.splitext(image_path)[1].lower()
+    if ext == ".pdf":
+        return _recognize_pdf(image_path, secret_id, secret_key)
+    return _recognize_image(image_path, secret_id, secret_key)
+
+
+def _recognize_image(image_path: str, secret_id: str, secret_key: str) -> dict:
+    """VatInvoiceOCR — 图片发票识别。"""
     # 读取图片并 Base64 编码
     try:
         with open(image_path, "rb") as f:
@@ -355,6 +360,121 @@ def _normalize_type(raw_type: str) -> str:
         return "全电普票" if "普通" in raw_type else "全电专票"
     # 兜底：保留原始值
     return raw_type
+
+
+# ── PDF 发票识别（通用票据识别 API）────────────────────────────────────
+
+def _recognize_pdf(file_path: str, secret_id: str, secret_key: str) -> dict:
+    """RecognizeGeneralInvoice — PDF 发票识别（支持多页）。"""
+    try:
+        with open(file_path, "rb") as f:
+            pdf_data = f.read()
+        pdf_base64 = base64.b64encode(pdf_data).decode("utf-8")
+    except Exception as exc:
+        return {"_error": f"PDF 读取失败: {exc}"}
+
+    payload = {
+        "ImageBase64": pdf_base64,
+        "EnableMultiplePage": True,
+    }
+
+    timestamp = int(time.time())
+    try:
+        authorization, content_type = _build_signature(
+            secret_id=secret_id, secret_key=secret_key,
+            service="ocr",
+            action="RecognizeGeneralInvoice",
+            version="2018-11-19",
+            region=TENCENT_OCR_REGION,
+            timestamp=timestamp,
+            payload=payload,
+        )
+    except Exception as exc:
+        return {"_error": f"签名计算失败: {exc}"}
+
+    url = f"https://{TENCENT_OCR_ENDPOINT}"
+    headers = {
+        "Authorization": authorization,
+        "Content-Type": content_type,
+        "Host": TENCENT_OCR_ENDPOINT,
+        "X-TC-Action": "RecognizeGeneralInvoice",
+        "X-TC-Timestamp": str(timestamp),
+        "X-TC-Version": "2018-11-19",
+        "X-TC-Region": TENCENT_OCR_REGION,
+    }
+
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            headers=headers, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            response_data = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"_error": f"API 请求失败: {exc}"}
+
+    if "Response" not in response_data:
+        return {"_error": "API 返回格式异常"}
+    resp = response_data["Response"]
+    if "Error" in resp:
+        code = resp["Error"].get("Code", "")
+        msg = resp["Error"].get("Message", "")
+        if any(kw in code for kw in ("LimitExceeded", "RequestLimitExceeded")):
+            mark_quota_exhausted()
+            return {"_error": f"本月免费额度已用完（{FREE_TIER_LIMIT}/{FREE_TIER_LIMIT}）"}
+        return {"_error": f"API 错误 [{code}]: {msg}"}
+
+    fields = _parse_pdf_response(resp)
+    if "_error" not in fields:
+        _increment_usage()
+    return fields
+
+
+def _parse_pdf_response(resp: dict) -> dict:
+    """解析 RecognizeGeneralInvoice 响应，提取字段。"""
+    fields = {
+        "date": "", "number": "", "buyer": "", "seller": "", "amount": "", "type": "",
+    }
+    items = resp.get("MixedInvoiceItems", [])
+    if not items:
+        return fields
+
+    # 取第一个识别到的票据
+    item = items[0]
+    if item.get("Code") != "OK":
+        return fields
+
+    # 提取类型
+    sub_type_desc = item.get("SubTypeDescription", "")
+    type_desc = item.get("TypeDescription", "")
+    fields["type"] = _normalize_type(sub_type_desc or type_desc or "")
+
+    # 提取具体字段（不同票种字段名不同，但常用字段名统一）
+    info = item.get("SingleInvoiceInfos", {})
+    info_data = {}
+    for v in info.values():
+        if isinstance(v, dict):
+            info_data.update(v)
+
+    raw_date = info_data.get("InvoiceDate", "")
+    if raw_date:
+        m = re.match(r"(\d{4})\D(\d{1,2})\D(\d{1,2})", raw_date)
+        if m:
+            fields["date"] = f"{m.group(1)}.{int(m.group(2)):02d}.{int(m.group(3)):02d}"
+
+    fields["number"] = info_data.get("InvoiceNumber", "")
+    fields["buyer"] = info_data.get("BuyerName", "")
+    fields["seller"] = info_data.get("SellerName", "")
+
+    raw_amount = info_data.get("AmountInFigres", "") or info_data.get("TotalAmount", "")
+    if raw_amount:
+        cleaned = re.sub(r"[^0-9.]", "", raw_amount)
+        if cleaned:
+            fields["amount"] = cleaned
+
+    return fields
 
 
 def _parse_response(resp: dict) -> dict:
