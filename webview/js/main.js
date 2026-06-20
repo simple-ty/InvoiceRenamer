@@ -82,7 +82,6 @@ async function init() {
     });
 
     $("custom-input").value = state.customValue;
-    $("summary-text").textContent = init.result_hint || "请选择文件或文件夹开始识别。";
 
     renderTemplateRows();
     renderStats(init.stats || {});
