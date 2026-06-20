@@ -13,9 +13,9 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlencode, quote
 
 # ── 常量 ──────────────────────────────────────────────────────────────────
 
@@ -304,41 +304,49 @@ def _parse_response(resp: dict) -> dict:
 
     info_map = {item["Name"]: item["Value"] for item in invoice_infos if "Name" in item}
 
-    # 字段映射
-    # 日期：腾讯云返回 "2024年01月15日" 格式，转为 "2024.01.15"
-    raw_date = info_map.get("InvoiceDate", "")
-    if raw_date:
-        import re
-        m = re.match(r"(\d{4})\D(\d{1,2})\D(\d{1,2})", raw_date)
-        if m:
-            fields["date"] = f"{m.group(1)}.{int(m.group(2)):02d}.{int(m.group(3)):02d}"
+    # 字段映射表：腾讯云中文名 → 本工具字段
+    _NAME_MAP = {
+        "开票日期": "date",
+        "发票号码": "number",
+        "购买方名称": "buyer",
+        "销售方名称": "seller",
+        "价税合计(小写)": "amount",
+        "发票类型": "type",
+    }
+
+    for cn_name, field_key in _NAME_MAP.items():
+        raw = info_map.get(cn_name, "")
+        if not raw:
+            continue
+
+        if field_key == "date":
+            # "2026年06月18日" → "2026.06.18"
+            m = re.match(r"(\d{4})\D(\d{1,2})\D(\d{1,2})", raw)
+            if m:
+                fields["date"] = f"{m.group(1)}.{int(m.group(2)):02d}.{int(m.group(3)):02d}"
+            else:
+                fields["date"] = raw
+
+        elif field_key == "amount":
+            # "¥245.00" → "245.00"
+            cleaned = re.sub(r"[^0-9.]", "", raw)
+            if cleaned:
+                fields["amount"] = cleaned
+
+        elif field_key == "type":
+            # 直接用中文类型名（如 "电子发票(普通发票)"）
+            fields["type"] = raw
+
         else:
-            fields["date"] = raw_date
+            fields[field_key] = raw
 
-    # 发票号码
-    fields["number"] = info_map.get("InvoiceNumber", "")
-
-    # 购买方
-    raw_buyer = info_map.get("BuyerName", "")
-    if raw_buyer:
-        # 复用 invoice_parser.py 的 sp() 截断逻辑（在调用处处理）
-        fields["buyer"] = raw_buyer
-
-    # 销售方
-    raw_seller = info_map.get("SellerName", "")
-    if raw_seller:
-        fields["seller"] = raw_seller
-
-    # 金额（价税合计）
-    raw_amount = info_map.get("AmountInFigres", "") or info_map.get("TotalAmount", "")
-    if not raw_amount:
-        # 尝试从组合字段提取
-        raw_amount = info_map.get("CombinedAmount", "")
-    if raw_amount:
-        # 清理金额（去掉非数字和小数点）
-        cleaned = re.sub(r"[^0-9.]", "", raw_amount)
-        if cleaned:
-            fields["amount"] = cleaned
+    # 兜底：如果没有价税合计金额，试试"合计金额"
+    if not fields["amount"]:
+        raw_amount = info_map.get("合计金额", "")
+        if raw_amount:
+            cleaned = re.sub(r"[^0-9.]", "", raw_amount)
+            if cleaned:
+                fields["amount"] = cleaned
 
     # 发票类型
     raw_type = info_map.get("InvoiceType", "")
