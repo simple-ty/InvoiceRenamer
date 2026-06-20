@@ -1338,6 +1338,14 @@ class App:
                     parsed = {"fields": {}, "error": "图片文件（未配置云端OCR）", "not_invoice": True}
             else:
                 parsed = parse_invoice(file_path)
+                # 扫描件 PDF（pdfplumber 无法提取文字）→ 兜底走云端识别
+                if (parsed.get("error") == "扫描件"
+                        and self._has_cloud_creds() and self._cloud_ocr_enabled):
+                    cloud_parsed = parse_image_cloud(
+                        file_path, self._cloud_secret_id, self._cloud_secret_key,
+                    )
+                    if not cloud_parsed.get("not_invoice") and not cloud_parsed.get("error"):
+                        parsed = cloud_parsed
             record = {
                 "path": file_path,
                 "source_name": os.path.basename(file_path),
