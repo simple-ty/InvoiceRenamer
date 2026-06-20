@@ -266,6 +266,11 @@ def _recognize_image(image_path: str, secret_id: str, secret_key: str) -> dict:
     except Exception as exc:
         return {"_error": f"图片读取失败: {exc}"}
 
+    return _recognize_image_base64(image_base64, secret_id, secret_key)
+
+
+def _recognize_image_base64(image_base64: str, secret_id: str, secret_key: str) -> dict:
+    """VatInvoiceOCR — 使用已编码的 Base64 图片进行识别。"""
     # 构建请求 payload
     payload = {"ImageBase64": image_base64}
 
@@ -565,19 +570,19 @@ def _parse_response(resp: dict) -> dict:
 def validate_credentials(secret_id: str, secret_key: str) -> tuple[bool, str]:
     """验证 API 密钥是否有效。
 
-    发送一次轻量请求（空图片会返回明确错误，而非鉴权错误），
-    通过错误类型判断密钥是否有效。
+    发送一次轻量请求（使用无效图片让 API 在鉴权后返回图片错误），
+    通过错误类型判断密钥是否有效。此请求不会消耗识别额度。
 
     Returns:
         (is_valid, message)
     """
-    # 用一个空的 base64 测试密钥
-    result = recognize_invoice(__file__, secret_id, secret_key)
+    # 用一个明显无效的 base64 图片测试密钥（不会消耗额度）
+    result = _recognize_image_base64("aW52YWxpZA==", secret_id, secret_key)
     if "_error" in result:
         err = result["_error"]
-        if "签名" in err or "AuthFailure" in err or "SecretId" in err:
+        if "签名" in err or "AuthFailure" in err or "SecretId" in err or "Unauthorized" in err:
             return False, "密钥无效，请检查 SecretId/SecretKey"
-        if "图片" in err:
+        if "图片" in err or "Decode" in err or "格式" in err or "Base64" in err:
             # 密钥有效但图片有问题——这是预期的测试结果
             return True, "密钥有效"
         return True, "密钥有效（检查通过）"

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Renamer</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 顶部 Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1 class="title">Invoice Renamer</h1>
+        <span class="subtitle">批量识别、预览、导出、重命名。现在支持可排序模板字段和自定义字段。</span>
+      </div>
+      <div class="header-right">
+        <div class="source-box">
+          <input type="text" id="path-input" class="path-input" placeholder="请选择文件夹，或选择多个 PDF 文件" readonly>
+          <button id="source-btn" class="btn btn-primary">选择来源 ▾</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 中间内容区 -->
+    <main class="content">
+      <!-- 左侧模板面板 -->
+      <aside class="template-panel">
+        <div class="template-header">
+          <h2 class="section-title">命名模板</h2>
+          <p class="section-desc">勾选需要的字段，拖拽手柄（≡）调整顺序。自定义字段可用于项目名、部门名、报销批次等固定内容。</p>
+        </div>
+
+        <div class="template-rows" id="template-rows">
+          <!-- 动态生成 -->
+        </div>
+
+        <div class="custom-box">
+          <label class="field-label">自定义字段内容</label>
+          <input type="text" id="custom-input" class="custom-input" placeholder="例如：项目A / 2026Q2 报销">
+          <p class="custom-hint">只有在勾选“自定义字段”后，输入的内容才会参与命名。</p>
+        </div>
+
+        <!-- 云端 OCR 设置入口 -->
+        <div class="cloud-row" id="cloud-row">
+          <div class="cloud-left">
+            <svg class="cloud-icon" viewBox="0 0 80 54" width="30" height="20">
+              <path d="M55,46 H20 C9.5,46 2,38.5 2,30 C2,22.5 7.5,16.5 15,16 C16.5,8.5 23.5,3 32,3 C39,3 45,7 47.5,13 C50,12 53,11 56,11 C66.5,11 74,19 74,29 C74,38.5 66.5,46 55,46 Z" fill="#3FA9F5"/>
+            </svg>
+            <span class="cloud-text">云端识别设置</span>
+          </div>
+          <button class="cloud-status-btn" id="cloud-status-btn">● 未配置</button>
+        </div>
+      </aside>
+
+      <!-- 中间结果面板 -->
+      <section class="results-panel">
+        <div class="results-top">
+          <div class="results-title-row">
+            <h2 class="section-title">识别结果</h2>
+            <p class="results-hint" id="summary-text">请选择文件或文件夹开始识别。</p>
+          </div>
+          <div class="stats-area" id="stats-area">
+            <!-- 动态生成 -->
+          </div>
+        </div>
+
+        <div class="table-shell">
+          <div class="table-header">
+            <div class="th col-idx" data-col="idx">#</div>
+            <div class="th col-org" data-col="org">原文件名</div>
+            <div class="th col-new" data-col="new">新文件名</div>
+            <div class="th col-type" data-col="type">发票类型</div>
+            <div class="th col-seller" data-col="seller">销售方/行程信息</div>
+            <div class="th col-amount" data-col="amount">金额</div>
+            <div class="th col-status" data-col="status">状态</div>
+          </div>
+          <div class="table-body" id="table-body">
+            <div class="empty-tip">暂无识别结果</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 底部操作栏 -->
+    <footer class="action-bar">
+      <span class="status-text" id="status-text">就绪</span>
+      <div class="progress-wrapper">
+        <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+      </div>
+      <label class="preview-switch">
+        <span class="switch-track" id="preview-switch">
+          <span class="switch-thumb"></span>
+        </span>
+        <span class="switch-label">预览模式（改名请关闭）</span>
+      </label>
+      <div class="action-group">
+        <button class="btn btn-secondary" id="rescan-btn">重新识别</button>
+        <button class="btn btn-secondary" id="export-btn">导出 Excel</button>
+        <button class="btn btn-primary" id="rename-btn">开始重命名</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 选择来源下拉菜单 -->
+  <div class="dropdown-menu" id="source-menu">
+    <div class="dropdown-item dropdown-main" data-action="choose_folder">选择文件夹</div>
+    <div class="dropdown-item" data-action="choose_files">选择文件</div>
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item" data-action="clear_source">清空</div>
+  </div>
+
+  <!-- 云端 OCR 设置弹窗 -->
+  <div class="modal-overlay" id="settings-overlay">
+    <div class="modal settings-modal">
+      <div class="modal-body">
+        <div class="card">
+          <!-- 启用开关 -->
+          <div class="switch-row">
+            <div class="switch-text">
+              <div class="switch-title">启用云端识别</div>
+              <div class="switch-desc">自动识别图片发票和扫描件 PDF</div>
+            </div>
+            <label class="toggle-switch" id="cloud-enable-switch">
+              <input type="checkbox" id="cloud-enable-input">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="modal-divider"></div>
+
+          <!-- API 密钥 -->
+          <div class="api-key-section">
+            <div class="api-key-title-row">
+              <div class="api-key-title">API 密钥</div>
+              <div class="usage-info" id="usage-info">
+                <div>本月已调用 0 次</div>
+                <div>免费额度 1000 次/月</div>
+              </div>
+            </div>
+
+            <label class="field-label">SecretId</label>
+            <input type="text" id="secret-id-input" class="modal-input" placeholder="AKIDxxxxxxxxxxxxxxxxxxxx">
+            <div class="hint-row">
+              <span class="hint-text">从腾讯云控制台 > API 密钥管理获取</span>
+              <a class="hint-link" id="get-key-link" href="#" target="_blank">点击获取 API 密钥</a>
+            </div>
+
+            <label class="field-label">SecretKey</label>
+            <div class="secret-input-wrapper">
+              <input type="password" id="secret-key-input" class="modal-input secret-input" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx">
+              <button class="toggle-text-btn" id="toggle-key-btn">显示</button>
+            </div>
+            <p class="modal-hint">保存时自动加密混淆，防止明文泄露</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="footer-left">
+          <button class="btn btn-danger-text" id="clear-key-btn">清除密钥</button>
+          <button class="btn btn-secondary" id="verify-key-btn">验证密钥</button>
+        </div>
+        <div class="footer-right">
+          <button class="btn btn-secondary" id="cancel-settings-btn">取消</button>
+          <button class="btn btn-info" id="save-settings-btn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
