@@ -63,6 +63,40 @@ def _ensure_config_dir() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
 
 
+# ── 用量统计 ──────────────────────────────────────────────────────────────
+
+FREE_TIER_LIMIT = 1000  # 腾讯云每月免费额度
+
+def _increment_usage() -> None:
+    """记录一次成功调用。按月份统计，跨月自动重置。"""
+    config = _load_config()
+    usage = config.get("cloud_ocr_usage", {})
+    now = datetime.now()
+    month_key = f"{now.year}-{now.month:02d}"
+    usage[month_key] = usage.get(month_key, 0) + 1
+    config["cloud_ocr_usage"] = usage
+    _save_config(config)
+
+
+def get_usage_stats() -> dict:
+    """获取当月用量统计。
+
+    Returns:
+        {"used": int, "remaining": int, "limit": int, "month": str}
+    """
+    config = _load_config()
+    usage = config.get("cloud_ocr_usage", {})
+    now = datetime.now()
+    month_key = f"{now.year}-{now.month:02d}"
+    used = usage.get(month_key, 0)
+    return {
+        "used": used,
+        "remaining": max(0, FREE_TIER_LIMIT - used),
+        "limit": FREE_TIER_LIMIT,
+        "month": month_key,
+    }
+
+
 def _load_config() -> dict:
     """加载配置文件，不存在则返回空字典。"""
     if not os.path.isfile(CONFIG_FILE):
@@ -260,11 +294,6 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
     except Exception as exc:
         return {"_error": f"API 请求失败: {exc}"}
 
-    # 调试输出
-    print(f"\n[云端OCR调试] 文件: {os.path.basename(image_path)}")
-    print(f"[云端OCR调试] 状态码: {response_data.get('Response', {}).get('Error', {}).get('Code', '成功')}")
-    print(f"[云端OCR调试] 原始响应:\n{json.dumps(response_data, ensure_ascii=False, indent=2)}")
-
     # 检查响应错误
     if "Response" not in response_data:
         return {"_error": "API 返回格式异常"}
@@ -276,7 +305,11 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
 
     # 解析发票字段
     result = _parse_response(resp)
-    print(f"[云端OCR调试] 解析结果: {json.dumps(result, ensure_ascii=False)}")
+
+    # 调用成功，更新使用计数
+    if "_error" not in result:
+        _increment_usage()
+
     return result
 
 

@@ -922,7 +922,7 @@ class App:
         """弹出云端 OCR 设置窗口。"""
         from cloud_ocr import (
             save_credentials, clear_credentials,
-            load_credentials, validate_credentials,
+            load_credentials, validate_credentials, get_usage_stats,
         )
 
         top = ctk.CTkToplevel(self.root)
@@ -991,6 +991,24 @@ class App:
         secret_id_entry.bind("<KeyRelease>", _update_switch)
         secret_key_entry.bind("<KeyRelease>", _update_switch)
         _update_switch()
+
+        # 用量统计
+        usage = get_usage_stats()
+        used = usage["used"]
+        remaining = usage["remaining"]
+        limit = usage["limit"]
+        if remaining <= 0:
+            usage_text = f"本月额度已用尽（{used}/{limit}），次月 1 日自动重置"
+            usage_color = "#FA5151"
+        elif remaining <= 100:
+            usage_text = f"本月已用 {used} 次，剩余 {remaining} 次（即将用尽）"
+            usage_color = "#FA9D3B"
+        else:
+            usage_text = f"本月已用 {used} 次，剩余 {remaining} 次"
+            usage_color = "#8A8A8A"
+        ctk.CTkLabel(container, text=usage_text,
+                     font=self.font_body, text_color=usage_color, anchor="w"
+                     ).pack(fill="x", pady=(0, 10))
 
         # 按钮区
         btn_frame = ctk.CTkFrame(container, fg_color="transparent")
