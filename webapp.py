@@ -12,7 +12,7 @@ import os
 import sys
 import threading
 import traceback
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -57,6 +57,7 @@ class Api:
         self._cloud_secret_id: str = ""
         self._cloud_secret_key: str = ""
         self._event_queue: list[dict] = []
+        self._event_lock = threading.Lock()
         self._load_cloud_ocr_state()
 
     def _load_cloud_ocr_state(self) -> None:
@@ -74,21 +75,19 @@ class Api:
 
     def _emit(self, event: str, data: dict) -> None:
         """把事件放入队列，前端通过 /api/poll 取走。"""
-        self._event_queue.append({"event": event, "data": data})
-        # 同时尝试 evaluate_js 推送（如果可用，作为加速）
+        self._event_lock.acquire()
         try:
-            import webview
-            if webview.windows:
-                win = webview.windows[0]
-                payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
-                safe = payload.replace("\\", "\\\\").replace("'", "\\'")
-                win.evaluate_js(f"window.__onPyEvent__&&window.__onPyEvent__(JSON.parse('{safe}'))")
-        except Exception:
-            pass
+            self._event_queue.append({"event": event, "data": data})
+        finally:
+            self._event_lock.release()
 
     def poll_events(self) -> dict:
-        events = self._event_queue[:]
-        self._event_queue.clear()
+        self._event_lock.acquire()
+        try:
+            events = self._event_queue[:]
+            self._event_queue.clear()
+        finally:
+            self._event_lock.release()
         return {"events": events}
 
     # ── 状态 ──────────────────────────────────────────────────────────
@@ -575,7 +574,7 @@ def main():
     RequestHandler.api = api
 
     port = find_free_port()
-    server = HTTPServer(("127.0.0.1", port), RequestHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), RequestHandler)
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
