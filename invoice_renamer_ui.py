@@ -998,13 +998,13 @@ class App:
         remaining = usage["remaining"]
         limit = usage["limit"]
         if remaining <= 0:
-            usage_text = f"本月额度已用尽（{used}/{limit}），次月 1 日自动重置"
+            usage_text = f"本月免费额度已用尽（{used}/{limit}），次月 1 日自动重置"
             usage_color = "#FA5151"
         elif remaining <= 100:
-            usage_text = f"本月已用 {used} 次，剩余 {remaining} 次（即将用尽）"
+            usage_text = f"本月已调用 {used} 次（剩余约 {remaining} 次）"
             usage_color = "#FA9D3B"
         else:
-            usage_text = f"本月已用 {used} 次，剩余 {remaining} 次"
+            usage_text = f"本月已调用 {used} 次（免费额度 {limit} 次/月）"
             usage_color = "#8A8A8A"
         ctk.CTkLabel(container, text=usage_text,
                      font=self.font_body, text_color=usage_color, anchor="w"

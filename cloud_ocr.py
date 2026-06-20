@@ -78,6 +78,17 @@ def _increment_usage() -> None:
     _save_config(config)
 
 
+def mark_quota_exhausted() -> None:
+    """标记当月额度已用尽（调用失败后触发）。"""
+    config = _load_config()
+    usage = config.get("cloud_ocr_usage", {})
+    now = datetime.now()
+    month_key = f"{now.year}-{now.month:02d}"
+    usage[month_key] = FREE_TIER_LIMIT  # 设为上限阈值
+    config["cloud_ocr_usage"] = usage
+    _save_config(config)
+
+
 def get_usage_stats() -> dict:
     """获取当月用量统计。
 
@@ -301,6 +312,10 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
     if "Error" in resp:
         error_code = resp["Error"].get("Code", "")
         error_msg = resp["Error"].get("Message", "")
+        # 检测额度耗尽错误
+        if any(kw in error_code for kw in ("LimitExceeded", "RequestLimitExceeded", "OperationDenied")):
+            mark_quota_exhausted()
+            return {"_error": f"本月免费额度已用完（{FREE_TIER_LIMIT}/{FREE_TIER_LIMIT}），次月 1 日自动重置"}
         return {"_error": f"API 错误 [{error_code}]: {error_msg}"}
 
     # 解析发票字段
