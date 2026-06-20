@@ -773,6 +773,7 @@ button, input {
 .footer-left,
 .footer-right {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -947,12 +948,15 @@ button, input {
 }
 
 .verify-result {
-  font-size: var(--font-hint);
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.3s;
   margin-left: 4px;
+  display: flex;
+  align-items: center;
+  line-height: 36px;
 }
 .verify-result.show {
   opacity: 1;
