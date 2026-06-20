@@ -260,15 +260,10 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
     except Exception as exc:
         return {"_error": f"API 请求失败: {exc}"}
 
-    # 调试：写原始响应到日志
-    try:
-        with open(os.path.join(os.path.dirname(__file__), "cloud_ocr_debug.log"), "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.now().isoformat()}] {os.path.basename(image_path)}\n")
-            f.write(f"REQUEST: {json.dumps(payload, ensure_ascii=False)}\n")
-            f.write(f"RESPONSE: {json.dumps(response_data, ensure_ascii=False, indent=2)}\n")
-            f.write("-" * 60 + "\n")
-    except Exception:
-        pass
+    # 调试输出
+    print(f"\n[云端OCR调试] 文件: {os.path.basename(image_path)}")
+    print(f"[云端OCR调试] 状态码: {response_data.get('Response', {}).get('Error', {}).get('Code', '成功')}")
+    print(f"[云端OCR调试] 原始响应:\n{json.dumps(response_data, ensure_ascii=False, indent=2)}")
 
     # 检查响应错误
     if "Response" not in response_data:
@@ -280,7 +275,9 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
         return {"_error": f"API 错误 [{error_code}]: {error_msg}"}
 
     # 解析发票字段
-    return _parse_response(resp)
+    result = _parse_response(resp)
+    print(f"[云端OCR调试] 解析结果: {json.dumps(result, ensure_ascii=False)}")
+    return result
 
 
 # ── 响应解析 ──────────────────────────────────────────────────────────────
