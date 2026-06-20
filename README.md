@@ -38,21 +38,17 @@ cd InvoiceRenamer
 # 安装依赖
 pip install -r requirements.txt
 
-# 运行 WebView 版（推荐）
+# 运行
 python webapp.py
-
-# 或运行原 customtkinter 版
-python invoice_renamer_ui.py
 ```
 
-**依赖清单**（仅 4 个第三方库，追求轻量）：
+**依赖清单**（仅 3 个第三方库，追求轻量）：
 
 | 库 | 用途 |
 |---|---|
 | pdfplumber | PDF 文本提取与发票字段解析 |
 | pywebview | WebView 桌面 UI 框架 |
 | openpyxl | Excel 导出 |
-| customtkinter | 旧版 UI（可选，WebView 版不需要） |
 
 ## 云端 OCR 配置
 
@@ -67,14 +63,13 @@ python invoice_renamer_ui.py
 
 ```
 InvoiceRenamer/
-├── webapp.py                # WebView 版主程序入口
-├── webapp.spec              # WebView 版 PyInstaller 打包配置
-├── build_webview.bat        # WebView 版一键打包脚本
-├── webview/                 # WebView 前端资源
+├── webapp.py                # 主程序入口
+├── webapp.spec              # PyInstaller 打包配置
+├── build_webview.bat        # 一键打包脚本
+├── webview/                 # 前端资源
 │   ├── main.html            # 主界面 HTML
 │   ├── css/main.css         # 样式
 │   └── js/main.js           # 交互逻辑
-├── invoice_renamer_ui.py    # 旧版 customtkinter 主程序
 ├── invoice_parser.py        # PDF 解析 + 发票字段提取
 ├── cloud_ocr.py             # 腾讯云 OCR 模块（签名/识别/密钥管理）
 ├── name_builder.py          # 命名规则引擎
@@ -82,9 +77,7 @@ InvoiceRenamer/
 ├── config.py                # 常量与配置
 ├── rules.json               # 正则规则（可配置）
 ├── requirements.txt         # 依赖清单
-├── InvoiceRenamer.spec      # 旧版打包配置
-├── build.bat                # 旧版一键打包脚本
-├── test_webapp.py           # WebView 版 API 测试脚本
+├── test_webapp.py           # API 测试脚本
 └── icon.ico                 # 应用图标
 ```
 
@@ -124,11 +117,8 @@ InvoiceRenamer/
 # 确保 PyInstaller 已安装
 pip install pyinstaller
 
-# WebView 版打包（推荐）
+# 打包
 build_webview.bat
-
-# 旧版打包
-build.bat
 ```
 
 输出：`dist/InvoiceRenamer_WebView_v{版本号}.exe`（约 37 MB）
