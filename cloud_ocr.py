@@ -433,7 +433,12 @@ def _recognize_pdf(file_path: str, secret_id: str, secret_key: str) -> dict:
 
 
 def _parse_pdf_response(resp: dict) -> dict:
-    """解析 RecognizeGeneralInvoice 响应，提取字段。"""
+    """解析 RecognizeGeneralInvoice 响应，提取字段。
+
+    RecognizeGeneralInvoice 各票种对象字段名不同，常见映射：
+      Date → date, Number → number, Buyer → buyer,
+      Seller → seller, Total → amount, Title → type
+    """
     fields = {
         "date": "", "number": "", "buyer": "", "seller": "", "amount": "", "type": "",
     }
@@ -441,7 +446,6 @@ def _parse_pdf_response(resp: dict) -> dict:
     if not items:
         return fields
 
-    # 取第一个识别到的票据
     item = items[0]
     if item.get("Code") != "OK":
         return fields
@@ -451,24 +455,29 @@ def _parse_pdf_response(resp: dict) -> dict:
     type_desc = item.get("TypeDescription", "")
     fields["type"] = _normalize_type(sub_type_desc or type_desc or "")
 
-    # 提取具体字段（不同票种字段名不同，但常用字段名统一）
+    # 合并 SingleInvoiceInfos 中非空的对象
     info = item.get("SingleInvoiceInfos", {})
     info_data = {}
     for v in info.values():
-        if isinstance(v, dict):
+        if isinstance(v, dict) and v:
             info_data.update(v)
 
-    raw_date = info_data.get("InvoiceDate", "")
+    if not info_data:
+        return fields
+
+    # 字段映射（通用字段名到本工具字段）
+    raw_date = info_data.get("Date", "") or info_data.get("InvoiceDate", "")
     if raw_date:
         m = re.match(r"(\d{4})\D(\d{1,2})\D(\d{1,2})", raw_date)
         if m:
             fields["date"] = f"{m.group(1)}.{int(m.group(2)):02d}.{int(m.group(3)):02d}"
 
-    fields["number"] = info_data.get("InvoiceNumber", "")
-    fields["buyer"] = info_data.get("BuyerName", "")
-    fields["seller"] = info_data.get("SellerName", "")
+    fields["number"] = info_data.get("Number", "") or info_data.get("InvoiceNumber", "")
+    fields["buyer"] = info_data.get("Buyer", "") or info_data.get("BuyerName", "")
+    fields["seller"] = info_data.get("Seller", "") or info_data.get("SellerName", "")
 
-    raw_amount = info_data.get("AmountInFigres", "") or info_data.get("TotalAmount", "")
+    raw_amount = (info_data.get("Total", "") or info_data.get("AmountInFigres", "")
+                  or info_data.get("TotalAmount", ""))
     if raw_amount:
         cleaned = re.sub(r"[^0-9.]", "", raw_amount)
         if cleaned:
