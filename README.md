@@ -140,7 +140,7 @@ build_webview.bat
 
 ## 技术特点
 
-- **轻量依赖**：仅 4 个第三方库，exe 37 MB（曾尝试引入 PyMuPDF/PaddleOCR，因体积过大移除）
+- **轻量依赖**：仅 3 个第三方库，exe 37 MB（曾尝试引入 PyMuPDF/PaddleOCR，因体积过大移除）
 - **云端 OCR 零依赖**：腾讯云 API 签名用 Python 标准库实现（hashlib + hmac + urllib），不引入 SDK
 - **通信架构**：WebView + 本地 HTTP Server（ThreadingHTTPServer），前端 fetch 调用，事件轮询推送
 - **保守识别策略**：非发票文件宁可跳过不误处理
