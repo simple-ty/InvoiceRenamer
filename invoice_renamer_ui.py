@@ -334,15 +334,15 @@ class App:
         # 云端 OCR 设置入口
         self._cloud_ocr_btn = ctk.CTkButton(
             pnl,
-            text="☁  cloud ocr settings",
-            font=self.font_small,
+            text="云端 OCR 识别设置",
+            font=self.font_body,
             fg_color="transparent",
             text_color="#555555",
             hover_color="#F0F0F0",
             border_width=1,
             border_color="#E5E5E5",
             corner_radius=6,
-            height=30,
+            height=32,
             anchor="w",
             command=self._open_cloud_ocr_settings,
         )
@@ -892,48 +892,48 @@ class App:
         )
 
         top = ctk.CTkToplevel(self.root)
-        top.title("cloud ocr settings")
-        top.geometry("440x340")
+        top.title("云端 OCR 设置")
+        top.geometry("440x360")
         top.resizable(False, False)
         top.transient(self.root)
         top.grab_set()
 
         container = ctk.CTkFrame(top, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=20, pady=16)
+        container.pack(fill="both", expand=True, padx=24, pady=18)
 
         # SecretId
-        ctk.CTkLabel(container, text="secret id", anchor="w",
+        ctk.CTkLabel(container, text="SecretId", anchor="w",
                      font=self.font_body).pack(fill="x", pady=(0, 2))
         secret_id_entry = ctk.CTkEntry(
             container, placeholder_text="AKIDxxxxxxxxxxxxxxxxxxxx",
             font=self.font_body,
         )
-        secret_id_entry.pack(fill="x", pady=(0, 4))
+        secret_id_entry.pack(fill="x", pady=(0, 2))
         secret_id_entry.insert(0, self._cloud_secret_id)
 
-        ctk.CTkLabel(container, text="from tencent cloud console > api key management",
+        ctk.CTkLabel(container, text="从腾讯云控制台 > API密钥管理 获取",
                      font=self.font_small, text_color="#8A8A8A", anchor="w"
                      ).pack(fill="x", pady=(0, 10))
 
         # SecretKey
-        ctk.CTkLabel(container, text="secret key", anchor="w",
+        ctk.CTkLabel(container, text="SecretKey", anchor="w",
                      font=self.font_body).pack(fill="x", pady=(0, 2))
         secret_key_entry = ctk.CTkEntry(
             container, placeholder_text="xxxxxxxxxxxxxxxxxxxxxxxx",
             font=self.font_body, show="*",
         )
-        secret_key_entry.pack(fill="x", pady=(0, 4))
+        secret_key_entry.pack(fill="x", pady=(0, 2))
         secret_key_entry.insert(0, self._cloud_secret_key)
 
-        ctk.CTkLabel(container, text="will be xor-obfuscated when saved",
+        ctk.CTkLabel(container, text="保存时将自动加密存储，防止明文泄露",
                      font=self.font_small, text_color="#8A8A8A", anchor="w"
-                     ).pack(fill="x", pady=(0, 10))
+                     ).pack(fill="x", pady=(0, 12))
 
         # 启用开关
         switch_frame = ctk.CTkFrame(container, fg_color="transparent")
-        switch_frame.pack(fill="x", pady=(0, 12))
+        switch_frame.pack(fill="x", pady=(0, 14))
         switch_label = ctk.CTkLabel(
-            switch_frame, text="enable cloud ocr",
+            switch_frame, text="启用云端识别",
             font=self.font_body, anchor="w",
         )
         switch_label.pack(side="left")
@@ -974,18 +974,19 @@ class App:
             sid = secret_id_entry.get().strip()
             skey = secret_key_entry.get().strip()
             if not sid or not skey:
-                messagebox.showinfo("verify", "please enter secret id and secret key first")
+                messagebox.showinfo("验证", "请先输入 SecretId 和 SecretKey")
                 return
-            from cloud_ocr import validate_credentials
             valid, msg = validate_credentials(sid, skey)
-            icon = "info" if valid else "warning"
-            messagebox.showicon(icon, "verify result", msg)
+            if valid:
+                messagebox.showinfo("验证结果", msg)
+            else:
+                messagebox.showwarning("验证结果", msg)
 
         def _do_save():
             sid = secret_id_entry.get().strip()
             skey = secret_key_entry.get().strip()
             if not sid or not skey:
-                messagebox.showinfo("save", "please enter both secret id and secret key")
+                messagebox.showinfo("保存", "请先输入 SecretId 和 SecretKey")
                 return
             enabled = bool(enable_switch.get())
             save_credentials(sid, skey, enabled=enabled)
@@ -995,21 +996,21 @@ class App:
             self.update_rename_button_state()
             top.destroy()
 
-        ctk.CTkButton(left_btns, text="clear keys",
+        ctk.CTkButton(left_btns, text="清除密钥",
                       fg_color="#FA5151", hover_color="#D94A4A",
-                      font=self.font_small, width=80, height=28,
-                      command=_do_clear).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(left_btns, text="verify",
-                      font=self.font_small, width=60, height=28,
+                      font=self.font_body, width=80, height=30,
+                      command=_do_clear).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(left_btns, text="验证密钥",
+                      font=self.font_body, width=72, height=30,
                       fg_color="transparent", border_width=1,
                       command=_do_verify).pack(side="left")
 
-        ctk.CTkButton(right_btns, text="cancel",
-                      font=self.font_small, width=60, height=28,
+        ctk.CTkButton(right_btns, text="取消",
+                      font=self.font_body, width=60, height=30,
                       fg_color="transparent", border_width=1,
-                      command=top.destroy).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(right_btns, text="save",
-                      font=self.font_small, width=60, height=28,
+                      command=top.destroy).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(right_btns, text="保存",
+                      font=self.font_body, width=60, height=30,
                       command=_do_save).pack(side="left")
 
     def _popup_source_menu(self) -> None:
