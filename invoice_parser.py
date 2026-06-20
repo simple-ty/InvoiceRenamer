@@ -241,6 +241,11 @@ def parse_image_cloud(file_path: str, secret_id: str, secret_key: str) -> dict:
     if fields.get("seller"):
         fields["seller"] = sp(fields["seller"])
 
+    # 检查是否解析出任何有效字段
+    has_any = any(fields.get(k) for k in ("date", "number", "buyer", "seller", "amount", "type"))
+    if not has_any:
+        return {"fields": {}, "error": "云端未识别到发票信息，请确认图片清晰且包含发票", "not_invoice": True}
+
     return {"fields": fields, "error": "", "not_invoice": False}
 
 

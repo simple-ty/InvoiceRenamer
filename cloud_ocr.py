@@ -260,6 +260,16 @@ def recognize_invoice(image_path: str, secret_id: str, secret_key: str) -> dict:
     except Exception as exc:
         return {"_error": f"API 请求失败: {exc}"}
 
+    # 调试：写原始响应到日志
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "cloud_ocr_debug.log"), "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat()}] {os.path.basename(image_path)}\n")
+            f.write(f"REQUEST: {json.dumps(payload, ensure_ascii=False)}\n")
+            f.write(f"RESPONSE: {json.dumps(response_data, ensure_ascii=False, indent=2)}\n")
+            f.write("-" * 60 + "\n")
+    except Exception:
+        pass
+
     # 检查响应错误
     if "Response" not in response_data:
         return {"_error": "API 返回格式异常"}
