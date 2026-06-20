@@ -38,6 +38,7 @@ class Api:
     """暴露给前端 JS 调用的 Python API。"""
 
     def __init__(self):
+        self.window = None
         self.selected_paths: list[str] = []
         self.records: list[dict] = []
         self.processing: bool = False
@@ -141,12 +142,14 @@ class Api:
 
     def choose_folder(self) -> dict:
         try:
-            import tkinter as tk
-            from tkinter import filedialog
-            root = tk.Tk()
-            root.withdraw()
-            folder = filedialog.askdirectory(title="请选择包含发票 PDF 或图片的文件夹")
-            root.destroy()
+            import webview
+            if not self.window and webview.windows:
+                self.window = webview.windows[0]
+            if not self.window:
+                return {"ok": False, "error": "窗口未就绪"}
+            folder = self.window.create_file_dialog(webview.FOLDER_DIALOG, directory="")
+            if folder and isinstance(folder, (list, tuple)):
+                folder = folder[0]
             if folder:
                 self.selected_paths = []
                 for root_dir, _, files in os.walk(folder):
@@ -157,23 +160,26 @@ class Api:
                 return {"ok": True, "path": folder, "summary": f"{len(self.selected_paths)} 个文件"}
             return {"ok": False}
         except Exception as e:
+            traceback.print_exc()
             return {"ok": False, "error": str(e)}
 
     def choose_files(self) -> dict:
         try:
-            import tkinter as tk
-            from tkinter import filedialog
-            root = tk.Tk()
-            root.withdraw()
-            files = filedialog.askopenfilenames(
-                title="选择发票文件",
-                filetypes=[
-                    ("发票文件", "*.pdf *.jpg *.jpeg *.png *.bmp *.tiff"),
-                    ("PDF 文件", "*.pdf"),
-                    ("图片文件", "*.jpg *.jpeg *.png *.bmp *.tiff"),
-                ],
+            import webview
+            if not self.window and webview.windows:
+                self.window = webview.windows[0]
+            if not self.window:
+                return {"ok": False, "error": "窗口未就绪"}
+            files = self.window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                directory="",
+                allow_multiple=True,
+                file_types=(
+                    "发票文件 (*.pdf;*.jpg;*.jpeg;*.png;*.bmp;*.tiff)",
+                    "PDF 文件 (*.pdf)",
+                    "图片文件 (*.jpg;*.jpeg;*.png;*.bmp;*.tiff)",
+                ),
             )
-            root.destroy()
             if files:
                 self.selected_paths = list(files)
                 ext_counts = {}
@@ -184,6 +190,7 @@ class Api:
                 return {"ok": True, "path": f"已选择 {len(files)} 个文件 ({summary})", "summary": summary}
             return {"ok": False}
         except Exception as e:
+            traceback.print_exc()
             return {"ok": False, "error": str(e)}
 
     def clear_source(self) -> dict:
@@ -547,6 +554,7 @@ def main():
         resizable=True,
         js_api=api,
     )
+    api.window = window
 
     def on_loaded():
         try:
@@ -556,7 +564,7 @@ def main():
             pass
 
     window.events.loaded += on_loaded
-    webview.start(debug=True)
+    webview.start(debug=False)
 
 
 if __name__ == "__main__":

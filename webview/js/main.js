@@ -39,14 +39,15 @@ const $ = (id) => document.getElementById(id);
 
 // 桥接调用
 async function py(method, ...args) {
+  if (!window.pywebview || !window.pywebview.api) {
+    throw new Error("pywebview api not ready");
+  }
   try {
-    if (window.pywebview && window.pywebview.api) {
-      return await window.pywebview.api[method](...args);
-    }
+    return await window.pywebview.api[method](...args);
   } catch (e) {
     console.error("pywebview call failed:", e);
+    throw e;
   }
-  return null;
 }
 
 // 初始化
@@ -54,27 +55,34 @@ async function init() {
   if (state._initialized) return;
   state._initialized = true;
 
-  const init = await py("get_init_state") || {};
-  Object.assign(state, {
-    version: init.version || "",
-    fieldOrder: init.field_order || [],
-    fieldEnabled: init.field_enabled || {},
-    fieldLabels: init.field_labels || {},
-    customValue: init.custom_value || "",
-    previewMode: init.preview_mode !== false,
-    cloud: init.cloud || { enabled: false, configured: false, secret_id: "" },
-  });
+  try {
+    const init = await py("get_init_state") || {};
+    console.log("[init] state:", init);
+    Object.assign(state, {
+      version: init.version || "",
+      fieldOrder: init.field_order || [],
+      fieldEnabled: init.field_enabled || {},
+      fieldLabels: init.field_labels || {},
+      customValue: init.custom_value || "",
+      previewMode: init.preview_mode !== false,
+      cloud: init.cloud || { enabled: false, configured: false, secret_id: "" },
+    });
 
-  $("custom-input").value = state.customValue;
-  $("summary-text").textContent = init.result_hint || "请选择文件或文件夹开始识别。";
+    $("custom-input").value = state.customValue;
+    $("summary-text").textContent = init.result_hint || "请选择文件或文件夹开始识别。";
 
-  renderTemplateRows();
-  renderStats(init.stats || {});
-  renderTable(init.records || []);
-  updateCloudButton();
-  updateRenameButton();
-  updatePreviewSwitch();
-  bindEvents();
+    renderTemplateRows();
+    renderStats(init.stats || {});
+    renderTable(init.records || []);
+    updateCloudButton();
+    updateRenameButton();
+    updatePreviewSwitch();
+    bindEvents();
+    updateStatus("就绪");
+  } catch (e) {
+    console.error("[init] failed:", e);
+    updateStatus("初始化失败: " + e.message);
+  }
 }
 
 function bindEvents() {
@@ -238,20 +246,28 @@ async function handleSourceAction(action) {
     return;
   }
   if (action === "choose_folder") {
+    updateStatus("正在打开文件夹选择...");
     const result = await py("choose_folder");
+    console.log("[choose_folder] result:", result);
     if (result && result.ok) {
       $("path-input").value = result.path;
       py("scan_files");
       state.scanning = true;
       updateStatus("识别中...");
+    } else {
+      updateStatus(result?.error || "选择文件夹失败或已取消");
     }
   } else if (action === "choose_files") {
+    updateStatus("正在打开文件选择...");
     const result = await py("choose_files");
+    console.log("[choose_files] result:", result);
     if (result && result.ok) {
       $("path-input").value = result.path;
       py("scan_files");
       state.scanning = true;
       updateStatus("识别中...");
+    } else {
+      updateStatus(result?.error || "选择文件失败或已取消");
     }
   }
 }
@@ -665,13 +681,32 @@ function debounce(fn, delay) {
 }
 
 // 启动：等待 pywebview 桥接就绪
-if (window.pywebview) {
-  init();
+function startInit() {
+  if (window.pywebview && window.pywebview.api) {
+    init();
+    return;
+  }
+  // 最多等待 5 秒，每 100ms 检查一次
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts++;
+    if (window.pywebview && window.pywebview.api) {
+      clearInterval(timer);
+      init();
+      return;
+    }
+    if (attempts > 50) {
+      clearInterval(timer);
+      updateStatus("初始化失败：Python 桥接未就绪");
+    }
+  }, 100);
+}
+
+window.addEventListener("pywebviewready", startInit);
+document.addEventListener("pywebviewready", startInit);
+// 兜底：页面加载完成后也尝试
+if (document.readyState === "complete") {
+  startInit();
 } else {
-  window.addEventListener("pywebviewready", init);
-  document.addEventListener("pywebviewready", init);
-  // 兜底：2 秒后如果仍未初始化，尝试直接调用
-  setTimeout(() => {
-    if (!state._initialized) init();
-  }, 2000);
+  document.addEventListener("DOMContentLoaded", startInit);
 }
