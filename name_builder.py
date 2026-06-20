@@ -21,6 +21,7 @@ def build_name(
     enabled_map: dict,
     field_order: list,
     custom_text: str = "",
+    ext: str = ".pdf",
 ) -> str:
     """
     根据字段配置拼接新文件名。
@@ -29,6 +30,7 @@ def build_name(
     enabled_map  : {key: bool} 各字段是否启用
     field_order  : 字段排序列表
     custom_text  : 自定义字段内容
+    ext          : 输出文件扩展名（默认 .pdf，图片场景 .jpg 等）
 
     返回如 "2024.01.15_增值税专票_某某有限公司_1234.56元_发票.pdf"
     """
@@ -47,8 +49,8 @@ def build_name(
             parts.append(cleaned)
 
     if not parts:
-        return "未识别发票.pdf"
-    return "_".join(parts) + ".pdf"
+        return f"未识别发票{ext}"
+    return "_".join(parts) + ext
 
 
 def ensure_unique_name(

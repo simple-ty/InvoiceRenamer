@@ -6,6 +6,10 @@ APP_ID = f"InvoiceRenamer.{APP_VERSION}"
 
 RESULT_HINT = "表格中可直接查看识别结果和拟生成文件名，确认无误后再执行重命名。"
 
+# 图片扩展名
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif")
+ALLOWED_EXTENSIONS = (".pdf",) + IMAGE_EXTENSIONS
+
 FIELD_LABELS = {
     "date": "开票日期",
     "type": "发票类型",

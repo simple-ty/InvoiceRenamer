@@ -65,9 +65,10 @@ from config import (  # noqa: E402
     APP_AUTHOR, APP_ID, APP_VERSION,
     DEFAULT_FIELD_ENABLED, DEFAULT_FIELD_ORDER,
     FIELD_LABELS, RESULT_HINT,
+    IMAGE_EXTENSIONS, ALLOWED_EXTENSIONS,
     STAT_CARD_STYLE, TREE_TAG_COLORS,
 )
-from invoice_parser import parse_invoice  # noqa: E402
+from invoice_parser import parse_invoice, parse_image_cloud  # noqa: E402
 from name_builder import build_name, ensure_unique_name, sanitize_part  # noqa: E402
 from excel_exporter import export_invoice_excel  # noqa: E402
 
@@ -123,6 +124,12 @@ class App:
         }
 
         self.custom_value_var.trace_add("write", lambda *_: self.on_template_change())
+
+        # 云端 OCR 状态
+        self._cloud_ocr_enabled = False
+        self._cloud_secret_id = ""
+        self._cloud_secret_key = ""
+        self._load_cloud_ocr_state()
 
         self._prepare_appearance()
         self._set_icon()
@@ -323,6 +330,23 @@ class App:
             font=self.font_subtitle, text_color="#4C4C4C",
             justify="left", wraplength=210,
         ).pack(anchor="w", padx=10, pady=(0, 8))
+
+        # 云端 OCR 设置入口
+        self._cloud_ocr_btn = ctk.CTkButton(
+            pnl,
+            text="☁  cloud ocr settings",
+            font=self.font_small,
+            fg_color="transparent",
+            text_color="#555555",
+            hover_color="#F0F0F0",
+            border_width=1,
+            border_color="#E5E5E5",
+            corner_radius=6,
+            height=30,
+            anchor="w",
+            command=self._open_cloud_ocr_settings,
+        )
+        self._cloud_ocr_btn.pack(fill="x", padx=10, pady=(0, 8))
 
     def refresh_template_panel(self) -> None:
         """刷新命名模板面板，支持拖拽排序。"""
@@ -709,9 +733,10 @@ class App:
                 else:
                     source_path = record["path"]
                     directory = os.path.dirname(source_path)
+                    ext = os.path.splitext(source_path)[1].lower() or ".pdf"
                     target_name = ensure_unique_name(
                         directory,
-                        build_name(record["fields"], enabled_map, field_order, custom_value),
+                        build_name(record["fields"], enabled_map, field_order, custom_value, ext=ext),
                         record["current_name"],
                     )
                     target_path = os.path.join(directory, target_name)
@@ -838,10 +863,154 @@ class App:
             self.selected_paths = []
             self.path_var.set(incoming)
             self.root.after(150, self.scan_files)
-        elif os.path.isfile(incoming) and incoming.lower().endswith(".pdf"):
+        elif os.path.isfile(incoming) and incoming.lower().endswith(ALLOWED_EXTENSIONS):
             self.selected_paths = [incoming]
             self.path_var.set(os.path.basename(incoming))
             self.root.after(150, self.scan_files)
+
+    # ── 云端 OCR 状态管理 ──────────────────────────────────────────────
+
+    def _load_cloud_ocr_state(self) -> None:
+        """加载云端 OCR 配置。"""
+        try:
+            from cloud_ocr import load_credentials
+            creds = load_credentials()
+            self._cloud_ocr_enabled = creds.get("enabled", False)
+            self._cloud_secret_id = creds.get("secret_id", "")
+            self._cloud_secret_key = creds.get("secret_key", "")
+        except Exception:
+            pass
+
+    def _has_cloud_creds(self) -> bool:
+        return bool(self._cloud_secret_id and self._cloud_secret_key)
+
+    def _open_cloud_ocr_settings(self) -> None:
+        """弹出云端 OCR 设置窗口。"""
+        from cloud_ocr import (
+            save_credentials, clear_credentials,
+            load_credentials, validate_credentials,
+        )
+
+        top = ctk.CTkToplevel(self.root)
+        top.title("cloud ocr settings")
+        top.geometry("440x340")
+        top.resizable(False, False)
+        top.transient(self.root)
+        top.grab_set()
+
+        container = ctk.CTkFrame(top, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=20, pady=16)
+
+        # SecretId
+        ctk.CTkLabel(container, text="secret id", anchor="w",
+                     font=self.font_body).pack(fill="x", pady=(0, 2))
+        secret_id_entry = ctk.CTkEntry(
+            container, placeholder_text="AKIDxxxxxxxxxxxxxxxxxxxx",
+            font=self.font_body,
+        )
+        secret_id_entry.pack(fill="x", pady=(0, 4))
+        secret_id_entry.insert(0, self._cloud_secret_id)
+
+        ctk.CTkLabel(container, text="from tencent cloud console > api key management",
+                     font=self.font_small, text_color="#8A8A8A", anchor="w"
+                     ).pack(fill="x", pady=(0, 10))
+
+        # SecretKey
+        ctk.CTkLabel(container, text="secret key", anchor="w",
+                     font=self.font_body).pack(fill="x", pady=(0, 2))
+        secret_key_entry = ctk.CTkEntry(
+            container, placeholder_text="xxxxxxxxxxxxxxxxxxxxxxxx",
+            font=self.font_body, show="*",
+        )
+        secret_key_entry.pack(fill="x", pady=(0, 4))
+        secret_key_entry.insert(0, self._cloud_secret_key)
+
+        ctk.CTkLabel(container, text="will be xor-obfuscated when saved",
+                     font=self.font_small, text_color="#8A8A8A", anchor="w"
+                     ).pack(fill="x", pady=(0, 10))
+
+        # 启用开关
+        switch_frame = ctk.CTkFrame(container, fg_color="transparent")
+        switch_frame.pack(fill="x", pady=(0, 12))
+        switch_label = ctk.CTkLabel(
+            switch_frame, text="enable cloud ocr",
+            font=self.font_body, anchor="w",
+        )
+        switch_label.pack(side="left")
+        enable_switch = ctk.CTkSwitch(switch_frame, text="")
+        enable_switch.pack(side="right")
+        enable_switch.select() if self._cloud_ocr_enabled else enable_switch.deselect()
+        # 密钥为空时禁用开关
+        def _update_switch(*_):
+            has_both = bool(secret_id_entry.get().strip() and secret_key_entry.get().strip())
+            enable_switch.configure(state="normal" if has_both else "disabled")
+            if not has_both:
+                enable_switch.deselect()
+        secret_id_entry.bind("<KeyRelease>", _update_switch)
+        secret_key_entry.bind("<KeyRelease>", _update_switch)
+        _update_switch()
+
+        # 按钮区
+        btn_frame = ctk.CTkFrame(container, fg_color="transparent")
+        btn_frame.pack(fill="x")
+
+        left_btns = ctk.CTkFrame(btn_frame, fg_color="transparent")
+        left_btns.pack(side="left")
+        right_btns = ctk.CTkFrame(btn_frame, fg_color="transparent")
+        right_btns.pack(side="right")
+
+        def _do_clear():
+            secret_id_entry.delete(0, "end")
+            secret_key_entry.delete(0, "end")
+            enable_switch.deselect()
+            _update_switch()
+            clear_credentials()
+            self._cloud_ocr_enabled = False
+            self._cloud_secret_id = ""
+            self._cloud_secret_key = ""
+            self.update_rename_button_state()
+
+        def _do_verify():
+            sid = secret_id_entry.get().strip()
+            skey = secret_key_entry.get().strip()
+            if not sid or not skey:
+                messagebox.showinfo("verify", "please enter secret id and secret key first")
+                return
+            from cloud_ocr import validate_credentials
+            valid, msg = validate_credentials(sid, skey)
+            icon = "info" if valid else "warning"
+            messagebox.showicon(icon, "verify result", msg)
+
+        def _do_save():
+            sid = secret_id_entry.get().strip()
+            skey = secret_key_entry.get().strip()
+            if not sid or not skey:
+                messagebox.showinfo("save", "please enter both secret id and secret key")
+                return
+            enabled = bool(enable_switch.get())
+            save_credentials(sid, skey, enabled=enabled)
+            self._cloud_ocr_enabled = enabled
+            self._cloud_secret_id = sid
+            self._cloud_secret_key = skey
+            self.update_rename_button_state()
+            top.destroy()
+
+        ctk.CTkButton(left_btns, text="clear keys",
+                      fg_color="#FA5151", hover_color="#D94A4A",
+                      font=self.font_small, width=80, height=28,
+                      command=_do_clear).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(left_btns, text="verify",
+                      font=self.font_small, width=60, height=28,
+                      fg_color="transparent", border_width=1,
+                      command=_do_verify).pack(side="left")
+
+        ctk.CTkButton(right_btns, text="cancel",
+                      font=self.font_small, width=60, height=28,
+                      fg_color="transparent", border_width=1,
+                      command=top.destroy).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(right_btns, text="save",
+                      font=self.font_small, width=60, height=28,
+                      command=_do_save).pack(side="left")
 
     def _popup_source_menu(self) -> None:
         """点击「选择来源」按钮后弹出自定义风格化下拉菜单。
@@ -947,7 +1116,7 @@ class App:
         self.progress_bar.set(0)
 
     def choose_folder(self) -> None:
-        folder = filedialog.askdirectory(title="请选择包含发票 PDF 的文件夹")
+        folder = filedialog.askdirectory(title="请选择包含发票 PDF 或图片的文件夹")
         if folder:
             self.selected_paths = []
             self.path_var.set(folder)
@@ -955,27 +1124,37 @@ class App:
 
     def choose_files(self) -> None:
         files = filedialog.askopenfilenames(
-            title="选择 PDF 发票文件", filetypes=[("PDF 文件", "*.pdf")]
+            title="选择发票文件",
+            filetypes=[
+                ("发票文件", "*.pdf *.jpg *.jpeg *.png *.bmp *.tiff"),
+                ("PDF 文件", "*.pdf"),
+                ("图片文件", "*.jpg *.jpeg *.png *.bmp *.tiff"),
+            ],
         )
         if files:
             self.selected_paths = list(files)
-            self.path_var.set(f"已选择 {len(files)} 个 PDF 文件")
+            ext_counts = {}
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+            summary = ", ".join(f"{c} {e}" for e, c in ext_counts.items())
+            self.path_var.set(f"已选择 {len(files)} 个文件 ({summary})")
             self.scan_files()
 
     def resolve_input_paths(self) -> list[str]:
         if self.selected_paths:
             return [
                 p for p in self.selected_paths
-                if os.path.isfile(p) and p.lower().endswith(".pdf")
+                if os.path.isfile(p) and p.lower().endswith(ALLOWED_EXTENSIONS)
             ]
         source = self.path_var.get().strip()
         if source and os.path.isdir(source):
             return [
                 os.path.join(source, n)
                 for n in sorted(os.listdir(source))
-                if n.lower().endswith(".pdf")
+                if n.lower().endswith(ALLOWED_EXTENSIONS)
             ]
-        if source and os.path.isfile(source) and source.lower().endswith(".pdf"):
+        if source and os.path.isfile(source) and source.lower().endswith(ALLOWED_EXTENSIONS):
             return [source]
         return []
 
@@ -984,10 +1163,10 @@ class App:
     def current_enabled_map(self) -> dict:
         return {k: bool(v.get()) for k, v in self.template_vars.items()}
 
-    def compose_name(self, fields: dict) -> str:
+    def compose_name(self, fields: dict, ext: str = ".pdf") -> str:
         return build_name(
             fields, self.current_enabled_map(), self.field_order,
-            self.custom_value_var.get(),
+            self.custom_value_var.get(), ext=ext,
         )
 
     def is_unrecognized_record(self, record: dict) -> bool:
@@ -1002,7 +1181,8 @@ class App:
         if self.is_unrecognized_record(record):
             record["new_name"] = record["current_name"]
             return record["new_name"]
-        desired = self.compose_name(record["fields"])
+        ext = os.path.splitext(record["path"])[1].lower() or ".pdf"
+        desired = self.compose_name(record["fields"], ext=ext)
         directory = os.path.dirname(record["path"])
         record["new_name"] = ensure_unique_name(
             directory, desired, current_name=record["current_name"]
@@ -1085,7 +1265,16 @@ class App:
 
         def process_one(file_path: str) -> dict:
             """处理单个文件：判定 → 解析 → 生成命名。返回 record。"""
-            parsed = parse_invoice(file_path)
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in IMAGE_EXTENSIONS:
+                if self._has_cloud_creds() and self._cloud_ocr_enabled:
+                    parsed = parse_image_cloud(
+                        file_path, self._cloud_secret_id, self._cloud_secret_key,
+                    )
+                else:
+                    parsed = {"fields": {}, "error": "图片文件（未配置云端OCR）", "not_invoice": True}
+            else:
+                parsed = parse_invoice(file_path)
             record = {
                 "path": file_path,
                 "source_name": os.path.basename(file_path),
@@ -1098,7 +1287,8 @@ class App:
             if self.is_unrecognized_record(record):
                 record["new_name"] = record["current_name"]
             else:
-                desired = build_name(record["fields"], enabled_map, field_order, custom_value)
+                desired = build_name(record["fields"], enabled_map, field_order, custom_value,
+                                      ext=ext if ext in IMAGE_EXTENSIONS else ".pdf")
                 directory = os.path.dirname(file_path)
                 record["new_name"] = ensure_unique_name(
                     directory, desired, current_name=record["current_name"],

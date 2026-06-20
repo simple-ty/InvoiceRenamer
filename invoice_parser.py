@@ -212,6 +212,38 @@ def is_invoice(file_path: str) -> bool:
         return False
 
 
+def parse_image_cloud(file_path: str, secret_id: str, secret_key: str) -> dict:
+    """云端 OCR 识别图片发票并提取字段。
+
+    Args:
+        file_path: 图片文件路径
+        secret_id: 腾讯云 API SecretId
+        secret_key: 腾讯云 API SecretKey
+
+    Returns:
+        {"fields": dict, "error": str, "not_invoice": bool}
+    """
+    from cloud_ocr import recognize_invoice
+
+    try:
+        result = recognize_invoice(file_path, secret_id, secret_key)
+    except Exception as exc:
+        return {"fields": {}, "error": f"云端识别失败: {exc}", "not_invoice": True}
+
+    if "_error" in result:
+        return {"fields": {}, "error": result["_error"], "not_invoice": True}
+
+    fields = result
+
+    # 用 sp() 截断买卖方名称（保持与 PDF 解析一致）
+    if fields.get("buyer"):
+        fields["buyer"] = sp(fields["buyer"])
+    if fields.get("seller"):
+        fields["seller"] = sp(fields["seller"])
+
+    return {"fields": fields, "error": "", "not_invoice": False}
+
+
 def parse_invoice(file_path: str) -> dict:
     """
     合并 is_invoice + extract_invoice_fields，减少 PDF 打开次数。
