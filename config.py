@@ -1,6 +1,6 @@
 """Invoice Renamer — 常量与配置"""
 
-APP_VERSION = "v0.4.5"
+APP_VERSION = "v0.5.0"
 APP_AUTHOR = "Simple"
 APP_ID = f"InvoiceRenamer.{APP_VERSION}"
 
