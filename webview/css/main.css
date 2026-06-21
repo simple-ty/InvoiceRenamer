@@ -1078,13 +1078,6 @@ button, input {
 .toast.error .toast-icon {
   background: var(--danger);
 }
-  font-size: 18px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
 .toast-title {
   font-size: var(--font-body);
   font-weight: 700;

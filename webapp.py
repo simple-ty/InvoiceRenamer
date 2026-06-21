@@ -106,7 +106,6 @@ class Api:
             "cloud": {
                 "enabled": self._cloud_ocr_enabled and self._has_cloud_creds(),
                 "configured": self._has_cloud_creds(),
-                "secret_id": self._cloud_secret_id,
             },
             "stats": self._calc_stats(),
             "records": self._serialize_records(),
@@ -215,76 +214,75 @@ class Api:
 
         def worker():
             records = []
-            for i, path in enumerate(paths):
-                try:
-                    ext = os.path.splitext(path)[1].lower()
-                    if ext == ".pdf":
-                        parsed = parse_invoice(path)
-                    elif ext in (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"):
-                        if self._cloud_ocr_enabled and self._has_cloud_creds():
-                            parsed = parse_image_cloud(
-                                path, self._cloud_secret_id, self._cloud_secret_key)
+            try:
+                for i, path in enumerate(paths):
+                    try:
+                        ext = os.path.splitext(path)[1].lower()
+                        if ext == ".pdf":
+                            parsed = parse_invoice(path)
+                        elif ext in (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"):
+                            if self._cloud_ocr_enabled and self._has_cloud_creds():
+                                parsed = parse_image_cloud(
+                                    path, self._cloud_secret_id, self._cloud_secret_key)
+                            else:
+                                parsed = {"fields": {}, "error": "云端未配置", "not_invoice": False,
+                                          "_status": "cloud_not_configured"}
                         else:
-                            parsed = {"fields": {}, "error": "云端未配置", "not_invoice": False,
-                                      "_status": "cloud_not_configured"}
-                    else:
-                        parsed = {"fields": {}, "error": "不支持的类型", "not_invoice": True}
+                            parsed = {"fields": {}, "error": "不支持的类型", "not_invoice": True}
 
-                    fields = parsed.get("fields", {})
-                    err = parsed.get("error", "")
-                    not_inv = parsed.get("not_invoice", False)
-                    force_status = parsed.get("_status", "")
+                        fields = parsed.get("fields", {})
+                        err = parsed.get("error", "")
+                        not_inv = parsed.get("not_invoice", False)
+                        force_status = parsed.get("_status", "")
 
-                    current_name = os.path.basename(path)
-                    record = {
-                        "path": path, "source_name": current_name,
-                        "current_name": current_name, "new_name": current_name,
-                        "fields": fields, "status": "", "error": err,
-                    }
+                        current_name = os.path.basename(path)
+                        record = {
+                            "path": path, "source_name": current_name,
+                            "current_name": current_name, "new_name": current_name,
+                            "fields": fields, "status": "", "error": err,
+                        }
 
-                    # 状态判定（优先级从高到低）
-                    if force_status == "cloud_not_configured":
-                        record["status"] = "cloud_not_configured"
-                    elif not_inv and ("云端" in err or "API" in err or "额度" in err):
-                        record["status"] = "cloud_error"
-                    elif not_inv:
-                        record["status"] = "not_invoice"
-                        record["error"] = err or "非发票"
-                    elif err:
-                        # 有错误但可能是部分识别
-                        if self._has_some_fields(fields):
+                        # 状态判定（优先级从高到低）
+                        if force_status == "cloud_not_configured":
+                            record["status"] = "cloud_not_configured"
+                        elif not_inv and ("云端" in err or "API" in err or "额度" in err):
+                            record["status"] = "cloud_error"
+                        elif not_inv:
+                            record["status"] = "not_invoice"
+                            record["error"] = err or "非发票"
+                        elif err:
+                            if self._has_some_fields(fields):
+                                record["status"] = "partial"
+                            else:
+                                record["status"] = "failed"
+                        elif self._has_required_fields(fields):
+                            record["status"] = "complete"
+                        elif self._has_some_fields(fields):
                             record["status"] = "partial"
                         else:
                             record["status"] = "failed"
-                    elif self._has_required_fields(fields):
-                        record["status"] = "complete"
-                    elif self._has_some_fields(fields):
-                        record["status"] = "partial"
-                    else:
-                        record["status"] = "failed"
-                        record["error"] = err or "识别失败"
-                    record["new_name"] = self._build_target_name(record)
-                    records.append(record)
-                    # 实时推送单条结果
-                    self._emit("scan_item", self._serialize_one(record, len(records) - 1))
-                except Exception as e:
-                    failed_rec = {
-                        "path": path, "source_name": os.path.basename(path),
-                        "current_name": os.path.basename(path),
-                        "new_name": os.path.basename(path),
-                        "fields": {}, "status": "failed", "error": str(e),
-                    }
-                    records.append(failed_rec)
-                    self._emit("scan_item", self._serialize_one(failed_rec, len(records) - 1))
-                self._emit("scan_progress", {"current": i + 1, "total": len(paths)})
-
-            self.records = records
-            self._scanning = False
-            self._emit("scan_finished", {
-                "records": self._serialize_records(),
-                "stats": self._calc_stats(),
-                "message": "识别完成",
-            })
+                            record["error"] = err or "识别失败"
+                        record["new_name"] = self._build_target_name(record)
+                        records.append(record)
+                        self._emit("scan_item", self._serialize_one(record, len(records) - 1))
+                    except Exception as e:
+                        failed_rec = {
+                            "path": path, "source_name": os.path.basename(path),
+                            "current_name": os.path.basename(path),
+                            "new_name": os.path.basename(path),
+                            "fields": {}, "status": "failed", "error": str(e),
+                        }
+                        records.append(failed_rec)
+                        self._emit("scan_item", self._serialize_one(failed_rec, len(records) - 1))
+                    self._emit("scan_progress", {"current": i + 1, "total": len(paths)})
+            finally:
+                self.records = records
+                self._scanning = False
+                self._emit("scan_finished", {
+                    "records": self._serialize_records(),
+                    "stats": self._calc_stats(),
+                    "message": "识别完成",
+                })
 
         threading.Thread(target=worker, daemon=True).start()
         return {"ok": True}
@@ -360,8 +358,10 @@ class Api:
     def on_rename_button_click(self) -> dict:
         if self.rename_history:
             self.undo_rename()
-        else:
-            self.start_rename()
+            return {"ok": True}
+        if self.processing or self._scanning or not self.records or self.preview_mode:
+            return {"ok": False, "error": "当前不可重命名"}
+        self.start_rename()
         return {"ok": True}
 
     def start_rename(self) -> None:
@@ -497,7 +497,7 @@ class Api:
         from cloud_ocr import get_usage_stats
         return {
             "secret_id": self._cloud_secret_id,
-            "secret_key": self._cloud_secret_key,
+            "secret_key": "****" if self._cloud_secret_key else "",
             "enabled": self._cloud_ocr_enabled and self._has_cloud_creds(),
             "usage": get_usage_stats(),
         }
@@ -507,6 +507,9 @@ class Api:
         sid = params.get("secret_id", "").strip()
         skey = params.get("secret_key", "").strip()
         enabled = bool(params.get("enabled", False))
+        # 前端回传 "****" 表示未修改密钥
+        if skey == "****" and self._cloud_secret_key:
+            skey = self._cloud_secret_key
         save_credentials(sid, skey, enabled=enabled)
         self._cloud_secret_id = sid
         self._cloud_secret_key = skey

@@ -250,25 +250,44 @@ def parse_image_cloud(file_path: str, secret_id: str, secret_key: str) -> dict:
 
 
 def parse_invoice(file_path: str) -> dict:
-    """
-    合并 is_invoice + extract_invoice_fields，减少 PDF 打开次数。
+    """解析发票文件，一次打开 PDF 完成判定和字段提取。"""
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            pages = list(pdf.pages)
+            if not pages:
+                return {"fields": {}, "error": "PDF 无页面", "not_invoice": True}
+            # 提取全部文本 + 首页图片数
+            text = "\n".join((p.extract_text() or "") for p in pages)
+            text = re.sub(r"(\D)\1{2}", r"\1", text)
+            img_count = len(pages[0].images)
 
-    非发票文件：只解析第一页判定即返回，跳过完整解析。
-    发票文件：完整解析提取字段。
+            if not text:
+                return {"fields": {}, "error": "无法提取文本", "not_invoice": True}
 
-    返回:
-        {
-            "fields": dict,     # 发票字段
-            "error": str,        # 错误信息（空字符串表示无错误）
-            "not_invoice": bool, # 是否非发票
-        }
-    """
-    if not is_invoice(file_path):
-        return {"fields": {}, "error": "非发票文件", "not_invoice": True}
+            # 发票判定
+            if not _check_invoice(text, img_count):
+                return {"fields": {}, "error": "非发票文件", "not_invoice": True}
 
-    fields = extract_invoice_fields(file_path)
-    error = fields.pop("_error", "")
-    return {"fields": fields, "error": error, "not_invoice": False}
+            # 字段提取
+            fields = _extract_fields_from_text(text)
+            error = fields.pop("_error", "")
+            return {"fields": fields, "error": error, "not_invoice": False}
+    except Exception as e:
+        return {"fields": {}, "error": str(e), "not_invoice": True}
+
+
+def _extract_fields_from_text(text: str) -> dict:
+    """从已提取的文本中解析发票字段（不打开 PDF）。"""
+    result = {
+        "date": "", "number": "", "buyer": "", "seller": "", "amount": "", "type": ""
+    }
+    rail = rx(text)
+    _try_date(result, text)
+    _try_number(result, text)
+    _try_type(result, text, rail)
+    _try_buyer_seller(result, text, rail)
+    _try_amount(result, text)
+    return result
 
 
 # ── 主解析函数 ─────────────────────────────────────────────────────────────────────

@@ -335,8 +335,10 @@ function sortTable(col) {
     th.classList.remove("sort-asc", "sort-desc");
     if (th.dataset.col === col) th.classList.add(state.sortReverse ? "sort-desc" : "sort-asc");
   });
+  const colMap = { org: "source_name", new: "new_name", type: "type", seller: "seller", amount: "amount", status: "status" };
+  const key = colMap[col] || col;
   const sorted = [...state.records].sort((a, b) => {
-    let va = a[col] || "", vb = b[col] || "";
+    let va = a[key] || "", vb = b[key] || "";
     if (typeof va === "number" && typeof vb === "number")
       return state.sortReverse ? vb - va : va - vb;
     return state.sortReverse

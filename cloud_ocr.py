@@ -67,9 +67,19 @@ def _ensure_config_dir() -> None:
 
 FREE_TIER_LIMIT = 1000  # 腾讯云每月免费额度
 
+# 内存缓存，避免每次调用都从磁盘读取配置
+_config_cache: dict | None = None
+
+def _get_config() -> dict:
+    """获取配置（内存缓存，首次读取后不再访问磁盘）。"""
+    global _config_cache
+    if _config_cache is None:
+        _config_cache = _load_config()
+    return _config_cache
+
 def _increment_usage() -> None:
     """记录一次成功调用。按月份统计，跨月自动重置。"""
-    config = _load_config()
+    config = _get_config()
     usage = config.get("cloud_ocr_usage", {})
     now = datetime.now()
     month_key = f"{now.year}-{now.month:02d}"
@@ -80,22 +90,18 @@ def _increment_usage() -> None:
 
 def mark_quota_exhausted() -> None:
     """标记当月额度已用尽（调用失败后触发）。"""
-    config = _load_config()
+    config = _get_config()
     usage = config.get("cloud_ocr_usage", {})
     now = datetime.now()
     month_key = f"{now.year}-{now.month:02d}"
-    usage[month_key] = FREE_TIER_LIMIT  # 设为上限阈值
+    usage[month_key] = FREE_TIER_LIMIT
     config["cloud_ocr_usage"] = usage
     _save_config(config)
 
 
 def get_usage_stats() -> dict:
-    """获取当月用量统计。
-
-    Returns:
-        {"used": int, "remaining": int, "limit": int, "month": str}
-    """
-    config = _load_config()
+    """获取当月用量统计。"""
+    config = _get_config()
     usage = config.get("cloud_ocr_usage", {})
     now = datetime.now()
     month_key = f"{now.year}-{now.month:02d}"
@@ -130,7 +136,7 @@ def _save_config(config: dict) -> None:
 
 def save_credentials(secret_id: str, secret_key: str, enabled: bool = False) -> None:
     """保存 API 密钥到配置文件（混淆后存储）。"""
-    config = _load_config()
+    config = _get_config()
     config["cloud_ocr"] = {
         "enabled": enabled,
         "provider": "tencent",
@@ -142,7 +148,7 @@ def save_credentials(secret_id: str, secret_key: str, enabled: bool = False) -> 
 
 def load_credentials() -> dict:
     """从配置文件加载 API 密钥（自动解密）。"""
-    config = _load_config().get("cloud_ocr", {})
+    config = _get_config().get("cloud_ocr", {})
     secret_id = _deobfuscate(config.get("secret_id", ""))
     secret_key = _deobfuscate(config.get("secret_key", ""))
     return {
@@ -155,7 +161,7 @@ def load_credentials() -> dict:
 
 def clear_credentials() -> None:
     """清除配置文件中的 API 密钥。"""
-    config = _load_config()
+    config = _get_config()
     config.pop("cloud_ocr", None)
     _save_config(config)
 
@@ -581,5 +587,6 @@ def validate_credentials(secret_id: str, secret_key: str) -> tuple[bool, str]:
         if "图片" in err or "Decode" in err or "格式" in err or "Base64" in err:
             # 密钥有效但图片有问题——这是预期的测试结果
             return True, "密钥有效"
-        return True, "密钥有效（检查通过）"
+        # 未知错误：不敢判定为有效
+        return False, f"无法验证：{err}"
     return True, "密钥有效"
