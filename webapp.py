@@ -497,7 +497,7 @@ class Api:
         from cloud_ocr import get_usage_stats
         return {
             "secret_id": self._cloud_secret_id,
-            "secret_key": "****" if self._cloud_secret_key else "",
+            "secret_key": self._cloud_secret_key,
             "enabled": self._cloud_ocr_enabled and self._has_cloud_creds(),
             "usage": get_usage_stats(),
         }
@@ -528,9 +528,12 @@ class Api:
 
     def verify_cloud_credentials(self, params: dict) -> dict:
         from cloud_ocr import validate_credentials
+        skey = params.get("secret_key", "").strip()
+        # 兜底：前端回传 **** 占位符时使用已存储的真实密钥
+        if skey == "****" and self._cloud_secret_key:
+            skey = self._cloud_secret_key
         valid, msg = validate_credentials(
-            params.get("secret_id", "").strip(),
-            params.get("secret_key", "").strip())
+            params.get("secret_id", "").strip(), skey)
         return {"ok": valid, "message": msg}
 
     def toggle_cloud_enabled(self) -> dict:

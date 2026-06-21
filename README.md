@@ -79,7 +79,6 @@ InvoiceRenamer/
 ├── config.py                # 常量与配置
 ├── rules.json               # 正则规则（可配置）
 ├── requirements.txt         # 依赖清单
-├── test_webapp.py           # API 测试脚本
 └── icon.ico                 # 应用图标
 ```
 

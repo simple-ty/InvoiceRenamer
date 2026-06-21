@@ -965,7 +965,6 @@ button, input {
   border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 2px;
-  position: relative;
 }
 .secret-input-wrapper:focus-within {
   border-color: var(--sky);
@@ -973,21 +972,19 @@ button, input {
 
 .secret-input {
   flex: 1;
+  min-width: 0;
   border: none !important;
   border-radius: 0 !important;
   margin-bottom: 0 !important;
-  padding-right: 40px;
+  padding-right: 8px;
 }
 
 .eye-btn {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1000,6 +997,9 @@ button, input {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
   opacity: 0;
   transition: opacity 0.3s;
   margin-left: 4px;

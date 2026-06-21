@@ -583,10 +583,10 @@ def validate_credentials(secret_id: str, secret_key: str) -> tuple[bool, str]:
     if "_error" in result:
         err = result["_error"]
         if "签名" in err or "AuthFailure" in err or "SecretId" in err or "Unauthorized" in err:
-            return False, "密钥无效，请检查 SecretId/SecretKey"
+            return False, "密钥无效"
         if "图片" in err or "Decode" in err or "格式" in err or "Base64" in err:
             # 密钥有效但图片有问题——这是预期的测试结果
             return True, "密钥有效"
         # 未知错误：不敢判定为有效
-        return False, f"无法验证：{err}"
+        return False, "无法验证"
     return True, "密钥有效"
