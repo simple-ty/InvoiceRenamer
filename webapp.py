@@ -9,6 +9,7 @@
 
 import json
 import os
+import socket
 import sys
 import threading
 import traceback
@@ -592,7 +593,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 def find_free_port() -> int:
-    import socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -600,9 +600,45 @@ def find_free_port() -> int:
     return port
 
 
+# ── 单实例锁 ────────────────────────────────────────────────────────────
+_INSTANCE_PORT = 18988
+_instance_sock: socket.socket | None = None
+
+def acquire_instance_lock() -> bool:
+    global _instance_sock
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", _INSTANCE_PORT))
+        s.listen(1)
+        _instance_sock = s
+        return True
+    except OSError:
+        s.close()
+        return False
+
+def release_instance_lock() -> None:
+    global _instance_sock
+    if _instance_sock:
+        try:
+            _instance_sock.close()
+        except Exception:
+            pass
+        _instance_sock = None
+
+def _msgbox(title: str, msg: str) -> None:
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, msg, title, 0x40)
+    except Exception:
+        print(f"[{title}] {msg}")
+
 # ── 启动入口 ────────────────────────────────────────────────────────────
 
 def main():
+    if not acquire_instance_lock():
+        _msgbox("Invoice Renamer", "程序已在运行，请勿重复启动。")
+        sys.exit(1)
+
     try:
         import webview
     except ImportError:
@@ -629,6 +665,7 @@ def main():
     api.window = window
     webview.start(debug=False)
     server.shutdown()
+    release_instance_lock()
 
 
 if __name__ == "__main__":
