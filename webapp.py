@@ -265,13 +265,17 @@ class Api:
                         record["error"] = err or "识别失败"
                     record["new_name"] = self._build_target_name(record)
                     records.append(record)
+                    # 实时推送单条结果
+                    self._emit("scan_item", self._serialize_one(record, len(records) - 1))
                 except Exception as e:
-                    records.append({
+                    failed_rec = {
                         "path": path, "source_name": os.path.basename(path),
                         "current_name": os.path.basename(path),
                         "new_name": os.path.basename(path),
                         "fields": {}, "status": "failed", "error": str(e),
-                    })
+                    }
+                    records.append(failed_rec)
+                    self._emit("scan_item", self._serialize_one(failed_rec, len(records) - 1))
                 self._emit("scan_progress", {"current": i + 1, "total": len(paths)})
 
             self.records = records
@@ -332,24 +336,23 @@ class Api:
             rec = self.records[idx]
             rec["new_name"] = new_name
             rec["manual_override"] = True
-            return {"ok": True, "record": self._serialize_one(idx)}
+            return {"ok": True, "record": self._serialize_one(rec, idx)}
         except (ValueError, IndexError):
             return {"ok": False, "error": "索引无效"}
 
-    def _serialize_one(self, idx: int) -> dict:
-        r = self.records[idx]
+    def _serialize_one(self, rec: dict, idx: int) -> dict:
         return {
             "idx": idx + 1,
-            "path": r.get("path", ""),
-            "source_name": r.get("source_name", ""),
-            "current_name": r.get("current_name", ""),
-            "new_name": r.get("new_name", ""),
-            "type": r.get("fields", {}).get("type", ""),
-            "seller": r.get("fields", {}).get("seller", ""),
-            "amount": r.get("fields", {}).get("amount", ""),
-            "status": r.get("status", "idle"),
-            "error": r.get("error", ""),
-            "manual_override": r.get("manual_override", False),
+            "path": rec.get("path", ""),
+            "source_name": rec.get("source_name", ""),
+            "current_name": rec.get("current_name", ""),
+            "new_name": rec.get("new_name", ""),
+            "type": rec.get("fields", {}).get("type", ""),
+            "seller": rec.get("fields", {}).get("seller", ""),
+            "amount": rec.get("fields", {}).get("amount", ""),
+            "status": rec.get("status", "idle"),
+            "error": rec.get("error", ""),
+            "manual_override": rec.get("manual_override", False),
         }
 
     # ── 重命名 ────────────────────────────────────────────────────────
@@ -478,7 +481,12 @@ class Api:
             if not result:
                 return {"ok": False, "error": "已取消"}
             path = result if isinstance(result, str) else result[0]
-            save_invoice_excel(self.records, path)
+            # 只导出 complete 或手动重命名的记录，跳过其他
+            export_records = [r for r in self.records
+                              if r.get("status") == "complete" or r.get("manual_override")]
+            if not export_records:
+                return {"ok": False, "error": "没有可导出的发票数据"}
+            save_invoice_excel(export_records, path)
             return {"ok": True, "path": path}
         except Exception as e:
             return {"ok": False, "error": str(e)}

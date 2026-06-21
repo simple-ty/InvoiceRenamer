@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>编辑按钮调试</title>
+<style>
+:root {
+  --font-family: "Microsoft YaHei UI", "PingFang SC", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-family);
+  font-size: 14px;
+  color: #191919;
+  background: #F5F5F5;
+  padding: 20px;
+}
+.table-shell {
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #FFF;
+}
+.table-header {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  background: #F2F3F5;
+  border-bottom: 1px solid #E5E5E5;
+  flex-shrink: 0;
+}
+.th {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #191919;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-idx { width: 44px; justify-content: center; }
+.col-org { flex: 1.1; min-width: 120px; }
+.col-new { flex: 1.4; min-width: 160px; }
+.col-type { width: 120px; }
+.col-seller { flex: 1; min-width: 120px; }
+.col-amount { width: 100px; justify-content: center; }
+.col-status { width: 120px; justify-content: center; }
+
+.table-body { background: #FFF; }
+
+.table-row {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  border-bottom: 1px solid #F0F0F0;
+  font-size: 13px;
+}
+.table-row:hover { background: #FAFAFA; }
+.table-row:last-child { border-bottom: none; }
+
+.td {
+  padding: 4px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #191919;
+}
+.td.col-idx { text-align: center; }
+.td.col-amount { text-align: center; }
+.td.col-status { text-align: center; }
+
+.editable-cell { position: relative; cursor: default; }
+.edit-icon {
+  position: absolute; top: -4px; right: 4px; bottom: -4px;
+  background: #191919; border-radius: 3px;
+  padding: 0 8px;
+  font-size: 14px; color: #FFFFFF; cursor: pointer;
+  line-height: 30px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.editable-cell.manual-override { background: rgba(25,25,25,0.02); }
+.editable-cell.manual-override .edit-text { color: #191919; font-weight: 500; font-style: normal; }
+.editable-cell.manual-override .edit-icon { opacity: 1; background: #191919; }
+.editable-cell:hover .edit-icon { opacity: 1; }
+.editable-cell:hover .edit-text { padding-right: 32px; }
+.edit-text.muted { color: #8A8A8A; font-style: italic; }
+.edit-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
+}
+
+.td.manual_rename { color: #191919; font-weight: 500; }
+
+/* row styles */
+.table-row.row-error { background: #FFF0F0; }
+.table-row.row-error:hover { background: #FFE4E4; }
+.table-row.row-warning { background: #FFF8E7; }
+.table-row.row-warning:hover { background: #FFF0D0; }
+
+/* ruler */
+.ruler {
+  position: relative;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #8A8A8A;
+}
+</style>
+</head>
+<body>
+
+<h2 style="margin-bottom: 12px; font-size: 15px;">编辑按钮调试 — 行高30px</h2>
+
+<div class="table-shell">
+  <div class="table-header">
+    <div class="th col-idx">#</div>
+    <div class="th col-org">原文件名</div>
+    <div class="th col-new">新文件名</div>
+    <div class="th col-type">类型</div>
+    <div class="th col-seller">销售方</div>
+    <div class="th col-amount">金额</div>
+    <div class="th col-status">状态</div>
+  </div>
+  <div class="table-body">
+
+    <!-- 行1：完整识别，不可编辑 -->
+    <div class="table-row">
+      <div class="td col-idx">1</div>
+      <div class="td col-org">电子发票_1234.pdf</div>
+      <div class="td col-new">2024.01.15_增票_1423.56元.pdf</div>
+      <div class="td col-type">增值税专票</div>
+      <div class="td col-seller">某某科技</div>
+      <div class="td col-amount">1423.56</div>
+      <div class="td col-status" style="color:#07C160">完整识别</div>
+    </div>
+
+    <!-- 行2：部分识别，可编辑，未手动改 -->
+    <div class="table-row row-warning">
+      <div class="td col-idx">2</div>
+      <div class="td col-org">发票_567.pdf</div>
+      <div class="td editable-cell">
+        <span class="edit-icon">✎</span>
+        <span class="edit-text muted">2024.03.20_普通发票_89.00元.pdf</span>
+      </div>
+      <div class="td col-type">普通发票</div>
+      <div class="td col-seller" style="color:#8A8A8A">—</div>
+      <div class="td col-amount">89.00</div>
+      <div class="td col-status" style="color:#FA9D3B">部分识别</div>
+    </div>
+
+    <!-- 行3：解析失败，可编辑，未手动改 -->
+    <div class="table-row" style="background:#FFF;">
+      <div class="td col-idx">3</div>
+      <div class="td col-org">扫描件.pdf</div>
+      <div class="td editable-cell">
+        <span class="edit-icon">✎</span>
+        <span class="edit-text muted">扫描件.pdf ← 未手动改，悬停显示黑色✎</span>
+      </div>
+      <div class="td col-type" style="color:#8A8A8A">—</div>
+      <div class="td col-seller" style="color:#8A8A8A">—</div>
+      <div class="td col-amount" style="color:#8A8A8A">—</div>
+      <div class="td col-status" style="color:#FA5151">解析失败</div>
+    </div>
+
+    <!-- 行4：解析失败，已手动改 -->
+    <div class="table-row">
+      <div class="td col-idx">4</div>
+      <div class="td col-org">photo.jpg</div>
+      <div class="td editable-cell manual-override">
+        <span class="edit-icon">✎</span>
+        <span class="edit-text">2024.05.10_增值税专票_照片.pdf ← 已手动改，✎始终红色</span>
+      </div>
+      <div class="td col-type" style="color:#8A8A8A">—</div>
+      <div class="td col-seller" style="color:#8A8A8A">—</div>
+      <div class="td col-amount" style="color:#8A8A8A">—</div>
+      <div class="td col-status manual_rename">手动重命名</div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top:16px; font-size:12px; color:#8A8A8A;">
+  悬停行2/3/4看✎按钮 · F12 查看CSS<br>
+  <span style="color:#FA5151;">核心修复：top/bottom: -4px 突破 td 的 4px padding · 黑色高对比度</span>
+</div>
+
+</body>
+</html>

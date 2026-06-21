@@ -61,7 +61,7 @@ function startPolling() {
         });
       }
     } catch (e) { /* 静默 */ }
-  }, 200);
+  }, 50);
 }
 
 // ── 初始化 ──────────────────────────────────────────────────────────────
@@ -277,6 +277,44 @@ async function rescanFiles() {
 
 // ── 表格渲染 ────────────────────────────────────────────────────────────
 
+function buildRow(r) {
+  const row = document.createElement("div");
+  row.className = "table-row";
+  row.dataset.idx = r.idx;
+  row.dataset.status = r.status;
+  const statusText = r.manual_override ? "手动重命名"
+    : { complete: "完整识别", partial: "部分识别",
+        failed: "解析失败", cloud_error: "云端异常",
+        not_invoice: "非发票", cloud_not_configured: "云端未启用",
+      }[r.status] || r.status;
+  const statusClass = r.manual_override ? "manual_rename" : r.status;
+  const rowClass = r.manual_override ? ""
+    : ["failed", "cloud_error"].includes(r.status) ? "row-error"
+    : r.status === "not_invoice" ? "row-weak"
+    : r.status === "cloud_not_configured" ? "row-info"
+    : r.status === "partial" ? "row-warning"
+    : "";
+  const editable = ["partial", "failed", "cloud_error", "cloud_not_configured"].includes(r.status);
+  const newNameClass = r.manual_override ? "col-new manual-override" : "col-new";
+  const newNameHtml = editable
+    ? `<div class="td ${newNameClass} editable-cell" title="${esc(r.new_name)}" data-new-name="${esc(r.new_name)}">
+         <span class="edit-icon">✎ 编辑</span>
+         <span class="edit-text${r.manual_override ? '' : ' muted'}">${esc(r.new_name)}</span>
+       </div>`
+    : `<div class="td col-new" title="${esc(r.new_name)}">${esc(r.new_name)}</div>`;
+  row.innerHTML = `
+    <div class="td col-idx">${r.idx}</div>
+    <div class="td col-org" title="${esc(r.source_name)}">${esc(r.source_name)}</div>
+    ${newNameHtml}
+    <div class="td col-type">${esc(r.type)}</div>
+    <div class="td col-seller" title="${esc(r.seller)}">${esc(r.seller)}</div>
+    <div class="td col-amount">${esc(r.amount)}</div>
+    <div class="td col-status ${statusClass}">${esc(statusText)}</div>
+  `;
+  if (rowClass) row.classList.add(rowClass);
+  return row;
+}
+
 function renderTable(records) {
   state.records = records || [];
   const tbody = $("table-body");
@@ -286,41 +324,7 @@ function renderTable(records) {
   }
   tbody.innerHTML = "";
   state.records.forEach(r => {
-    const row = document.createElement("div");
-    row.className = "table-row";
-    row.dataset.idx = r.idx;
-    row.dataset.status = r.status;
-    const statusText = r.manual_override ? "手动重命名"
-      : { complete: "完整识别", partial: "部分识别",
-          failed: "解析失败", cloud_error: "云端异常",
-          not_invoice: "非发票", cloud_not_configured: "云端未启用",
-        }[r.status] || r.status;
-    const statusClass = r.manual_override ? "manual_rename" : r.status;
-    const rowClass = r.manual_override ? ""
-      : ["failed", "cloud_error"].includes(r.status) ? "row-error"
-      : r.status === "not_invoice" ? "row-weak"
-      : r.status === "cloud_not_configured" ? "row-info"
-      : r.status === "partial" ? "row-warning"
-      : "";
-    const editable = ["partial", "failed", "cloud_error", "cloud_not_configured"].includes(r.status);
-    const newNameClass = r.manual_override ? "col-new manual-override" : "col-new";
-    const newNameHtml = editable
-      ? `<div class="td ${newNameClass} editable-cell" title="${esc(r.new_name)}" data-new-name="${esc(r.new_name)}">
-           <span class="edit-icon">✎</span>
-           <span class="edit-text${r.manual_override ? '' : ' muted'}">${esc(r.new_name)}</span>
-         </div>`
-      : `<div class="td col-new" title="${esc(r.new_name)}">${esc(r.new_name)}</div>`;
-    row.innerHTML = `
-      <div class="td col-idx">${r.idx}</div>
-      <div class="td col-org" title="${esc(r.source_name)}">${esc(r.source_name)}</div>
-      ${newNameHtml}
-      <div class="td col-type">${esc(r.type)}</div>
-      <div class="td col-seller" title="${esc(r.seller)}">${esc(r.seller)}</div>
-      <div class="td col-amount">${esc(r.amount)}</div>
-      <div class="td col-status ${statusClass}">${esc(statusText)}</div>
-    `;
-    if (rowClass) row.classList.add(rowClass);
-    tbody.appendChild(row);
+    tbody.appendChild(buildRow(r));
   });
 }
 
@@ -343,6 +347,17 @@ function sortTable(col) {
 }
 
 // ── 统计 ────────────────────────────────────────────────────────────────
+
+function _calcStats(records) {
+  const stats = { total: 0, complete: 0, partial: 0, failed: 0, not_invoice: 0, cloud_not_configured: 0 };
+  records.forEach(r => {
+    stats.total++;
+    const key = r.status || "";
+    if (stats[key] !== undefined) stats[key]++;
+    else if (key === "cloud_error") stats.failed++;  // 归入失败
+  });
+  return stats;
+}
 
 function renderStats(stats) {
   const container = $("stats-area");
@@ -544,9 +559,20 @@ window.__onPyEvent__ = function(payload) {
     case "scan_progress":
       setProgress(data.current / data.total);
       updateStatus(`识别中... (${data.current}/${data.total})`); break;
+    case "scan_item":
+      const tb = $("table-body");
+      if (tb.querySelector(".empty-tip")) tb.innerHTML = "";
+      state.records.push(data);
+      tb.appendChild(buildRow(data));
+      renderStats(_calcStats(state.records)); break;
     case "scan_finished":
-      state.scanning = false; state.records = data.records || [];
-      renderTable(state.records); renderStats(data.stats || {});
+      state.scanning = false;
+      // 兜底：若实时推送未生效，从完整列表渲染
+      if (data.records && data.records.length > state.records.length) {
+        state.records = data.records;
+        renderTable(state.records);
+      }
+      renderStats(data.stats || _calcStats(state.records));
       setProgress(1); updateStatus(data.message || "识别完成");
       updateRenameButton(); break;
     case "rename_started":
@@ -603,7 +629,7 @@ function startEditName(cell) {
         const rec = state.records.find(v => v.idx == idx);
         if (rec) { rec.new_name = name; rec.manual_override = true; }
         cell.classList.remove("editing");
-        cell.innerHTML = `<span class="edit-icon">✎</span><span class="edit-text">${esc(name)}</span>`;
+        cell.innerHTML = `<span class="edit-icon">✎ 编辑</span><span class="edit-text">${esc(name)}</span>`;
         cell.classList.add("manual-override");
       } else {
         cancelEdit(cell, curName);
@@ -618,7 +644,7 @@ function startEditName(cell) {
 function cancelEdit(cell, restoreName) {
   cell.classList.remove("editing");
   cell.dataset.newName = restoreName;
-  cell.innerHTML = `<span class="edit-icon">✎</span><span class="edit-text muted">${esc(restoreName)}</span>`;
+  cell.innerHTML = `<span class="edit-icon">✎ 编辑</span><span class="edit-text muted">${esc(restoreName)}</span>`;
 }
 
 function updateRow(idx, data) {
