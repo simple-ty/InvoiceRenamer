@@ -159,6 +159,13 @@ function bindEvents() {
   document.querySelectorAll(".th").forEach(th => {
     th.addEventListener("click", () => sortTable(th.dataset.col));
   });
+
+  // 表格内编辑 — 点击 ✎ 切换输入
+  $("table-body").addEventListener("click", (e) => {
+    const icon = e.target.closest(".edit-icon");
+    if (!icon) return;
+    startEditName(icon.parentElement);
+  });
 }
 
 // ── 模板渲染与拖拽 ──────────────────────────────────────────────────────
@@ -282,6 +289,7 @@ function renderTable(records) {
     const row = document.createElement("div");
     row.className = "table-row";
     row.dataset.idx = r.idx;
+    row.dataset.status = r.status;
     const statusText = {
       complete: "完整识别", partial: "部分识别",
       failed: "解析失败", cloud_error: "云端异常",
@@ -292,10 +300,18 @@ function renderTable(records) {
       : r.status === "cloud_not_configured" ? "row-info"
       : r.status === "partial" ? "row-warning"
       : "";
+    const editable = ["partial", "failed", "cloud_error", "cloud_not_configured"].includes(r.status);
+    const newNameClass = r.manual_override ? "col-new manual-override" : "col-new";
+    const newNameHtml = editable
+      ? `<div class="td ${newNameClass} editable-cell" title="${esc(r.new_name)}" data-new-name="${esc(r.new_name)}">
+           <span class="edit-icon">✎</span>
+           <span class="edit-text${r.manual_override ? '' : ' muted'}">${esc(r.new_name)}</span>
+         </div>`
+      : `<div class="td col-new" title="${esc(r.new_name)}">${esc(r.new_name)}</div>`;
     row.innerHTML = `
       <div class="td col-idx">${r.idx}</div>
       <div class="td col-org" title="${esc(r.source_name)}">${esc(r.source_name)}</div>
-      <div class="td col-new" title="${esc(r.new_name)}">${esc(r.new_name)}</div>
+      ${newNameHtml}
       <div class="td col-type">${esc(r.type)}</div>
       <div class="td col-seller" title="${esc(r.seller)}">${esc(r.seller)}</div>
       <div class="td col-amount">${esc(r.amount)}</div>
@@ -559,6 +575,49 @@ window.__onPyEvent__ = function(payload) {
     case "status": updateStatus(data.message || ""); break;
   }
 };
+
+// ── 行内编辑文件名 ──────────────────────────────────────────────────────
+
+function startEditName(cell) {
+  if (cell.classList.contains("editing")) return;
+  const row = cell.closest(".table-row");
+  const idx = row.dataset.idx;
+  const curName = cell.dataset.newName;
+  cell.classList.add("editing");
+  cell.innerHTML = `
+    <input class="edit-input" value="${esc(curName)}" maxlength="200">
+    <span class="edit-confirm">✓</span>
+    <span class="edit-cancel">✕</span>
+  `;
+  const input = cell.querySelector(".edit-input");
+  input.focus();
+  input.select();
+  const commit = () => {
+    const name = input.value.trim();
+    if (!name) { cancelEdit(cell, curName); return; }
+    cell.dataset.newName = name;
+    apiPost("update_record_name", { idx: idx, new_name: name }).then(r => {
+      if (r.ok && r.record) {
+        const rec = state.records.find(v => v.idx == idx);
+        if (rec) { rec.new_name = name; rec.manual_override = true; }
+        cell.classList.remove("editing");
+        cell.innerHTML = `<span class="edit-icon">✎</span><span class="edit-text">${esc(name)}</span>`;
+        cell.classList.add("manual-override");
+      } else {
+        cancelEdit(cell, curName);
+      }
+    }).catch(() => cancelEdit(cell, curName));
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") commit(); });
+  cell.querySelector(".edit-confirm").addEventListener("click", commit);
+  cell.querySelector(".edit-cancel").addEventListener("click", () => cancelEdit(cell, curName));
+}
+
+function cancelEdit(cell, restoreName) {
+  cell.classList.remove("editing");
+  cell.dataset.newName = restoreName;
+  cell.innerHTML = `<span class="edit-icon">✎</span><span class="edit-text muted">${esc(restoreName)}</span>`;
+}
 
 function updateRow(idx, data) {
   const row = document.querySelector(`.table-row[data-idx="${idx}"]`);

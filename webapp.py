@@ -137,6 +137,7 @@ class Api:
                 "amount": r.get("fields", {}).get("amount", ""),
                 "status": r.get("status", "idle"),
                 "error": r.get("error", ""),
+                "manual_override": r.get("manual_override", False),
             })
         return out
 
@@ -316,6 +317,41 @@ class Api:
         self.preview_mode = bool(params.get("preview_mode", True))
         return {"ok": True, "can_rename": not self.preview_mode and bool(self.records)}
 
+    # ── 手动编辑文件名 ──────────────────────────────────────────────
+
+    def update_record_name(self, params: dict) -> dict:
+        """前端手动修改某行 new_name，返回更新后的该行数据。"""
+        idx = params.get("idx")
+        new_name = params.get("new_name", "").strip()
+        if not idx or not new_name:
+            return {"ok": False, "error": "参数无效"}
+        try:
+            idx = int(idx) - 1  # 前端 idx 从 1 开始
+            if idx < 0 or idx >= len(self.records):
+                return {"ok": False, "error": "索引越界"}
+            rec = self.records[idx]
+            rec["new_name"] = new_name
+            rec["manual_override"] = True
+            return {"ok": True, "record": self._serialize_one(idx)}
+        except (ValueError, IndexError):
+            return {"ok": False, "error": "索引无效"}
+
+    def _serialize_one(self, idx: int) -> dict:
+        r = self.records[idx]
+        return {
+            "idx": idx + 1,
+            "path": r.get("path", ""),
+            "source_name": r.get("source_name", ""),
+            "current_name": r.get("current_name", ""),
+            "new_name": r.get("new_name", ""),
+            "type": r.get("fields", {}).get("type", ""),
+            "seller": r.get("fields", {}).get("seller", ""),
+            "amount": r.get("fields", {}).get("amount", ""),
+            "status": r.get("status", "idle"),
+            "error": r.get("error", ""),
+            "manual_override": r.get("manual_override", False),
+        }
+
     # ── 重命名 ────────────────────────────────────────────────────────
 
     def on_rename_button_click(self) -> dict:
@@ -339,7 +375,7 @@ class Api:
             errors = []
             history = []
             for idx, record in snapshot:
-                if record.get("status") != "complete":
+                if record.get("status") != "complete" and not record.get("manual_override"):
                     skipped += 1
                     self._emit("rename_progress", {
                         "current": idx, "total": total,
@@ -552,6 +588,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(self.api.scan_files())
         elif path == "/api/update_template":
             self._json(self.api.update_template(params))
+        elif path == "/api/update_record_name":
+            self._json(self.api.update_record_name(params))
         elif path == "/api/toggle_cloud_enabled":
             self._json(self.api.toggle_cloud_enabled())
         elif path == "/api/on_rename_button_click":
