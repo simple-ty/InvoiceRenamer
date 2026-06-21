@@ -24,7 +24,7 @@
 
 ### 方式一：下载 exe（推荐）
 
-1. 前往 [Releases](https://github.com/simple-ty/InvoiceRenamer/releases) 下载最新版 `InvoiceRenamer_WebView_vX.X.X.exe`
+1. 前往 [Releases](https://github.com/simple-ty/InvoiceRenamer/releases) 下载最新版 `InvoiceRenamer_vX.X.X.exe`
 2. 双击运行（首次运行如被 Windows SmartScreen 拦截，点击「仍要运行」）
 3. 选择发票所在文件夹 → 扫描 → 确认 → 重命名
 
@@ -122,7 +122,7 @@ pip install pyinstaller
 build_webview.bat
 ```
 
-输出：`dist/InvoiceRenamer_WebView_v{版本号}.exe`（约 37 MB）
+输出：`dist/InvoiceRenamer_v{版本号}.exe`（约 37 MB）
 
 打包配置说明：
 - onefile 模式，单文件分发
@@ -134,8 +134,8 @@ build_webview.bat
 
 | 版本 | 主要更新 |
 |---|---|
-| **v0.5.8** | 状态精细化（6种+行着色）；Toast 通知（成功/失败）；导出对话框风格统一；原子写入配置；淘汰 API 替换；runtime 常驻免重复解压 |
-| **v0.5.6** | 代码审查与稳定性修复：原子写配置文件、REST 语义修正、发票类型映射优化、自定义字段禁用联动、接口防重入、初始化重试上限 |
+| **v0.5.16** | 设置对话框修复：密钥验证 **** 兜底、眼按钮 flex 布局修复点击失效、提示文案精简；清理测试文件 |
+| **v0.5.11** | 实时逐行扫描 + 增量渲染；手动编辑文件名；单实例锁；6种状态精细化 + 行着色；Toast 通知 |
 | **v0.5.0** | WebView 新版 UI（HTML/CSS/JS）；腾讯云 OCR 图片发票识别；扫描件 PDF 识别；API 密钥混淆存储；云端用量统计；HTTP Server 通信架构 |
 | v0.4.5 | 修复 buyer/seller 后缀丢失与方向反转；长公司名智能截断；选择按钮合并为浮层下拉菜单；扫描结果逐行实时显示；表头点击排序；表头改名「销售方/行程信息」 |
 | v0.4.0 | 非发票文件检测与跳过；is_invoice 三道关卡判定；列宽自适应 + 水平滚动条；拖拽排序修复；状态提示精简 |
