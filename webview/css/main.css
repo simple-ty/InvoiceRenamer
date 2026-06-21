@@ -67,6 +67,56 @@ button, input {
   min-height: 64px;
 }
 
+/* ── Update Banner ──────────────────────────────────────── */
+.update-banner {
+  display: none;
+  align-items: center;
+  background: #E8F4FD;
+  border: 1px solid #B8D8F0;
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+
+.update-banner.show {
+  display: flex;
+}
+
+.update-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.update-text strong {
+  color: var(--sky);
+}
+
+.update-link {
+  font-size: 13px;
+  color: var(--sky);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.update-link:hover {
+  text-decoration: underline;
+}
+
+.update-close {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.update-close:hover {
+  color: var(--text-primary);
+}
+
 .header-left {
   display: flex;
   align-items: baseline;
@@ -88,6 +138,32 @@ button, input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.check-update-btn {
+  margin-left: 4px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-size: var(--font-hint);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.check-update-btn:hover:not(:disabled) {
+  border-color: var(--sky);
+  color: var(--sky);
+}
+.check-update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.check-update-btn.checking {
+  border-color: var(--sky);
+  color: var(--sky);
 }
 
 .header-right {

@@ -12,7 +12,9 @@ import os
 import socket
 import sys
 import threading
+import time
 import traceback
+import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -38,6 +40,20 @@ from excel_exporter import save_invoice_excel, generate_default_filename
 def resource_path(relative_path: str) -> str:
     base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
     return os.path.join(base_path, relative_path)
+
+
+def _version_newer(remote: str, local: str) -> bool:
+    """比较版本号，remote > local 返回 True。支持 v 前缀。"""
+    def parse(v: str):
+        v = v.lstrip("vV")
+        parts = []
+        for p in v.split("."):
+            try:
+                parts.append(int(p))
+            except ValueError:
+                parts.append(0)
+        return parts
+    return parse(remote) > parse(local)
 
 
 # ── 业务 API（与 UI 框架无关）────────────────────────────────────────────
@@ -554,6 +570,86 @@ class Api:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def check_update(self, force: bool = False) -> dict:
+        """检查是否有新版本。
+
+        双重检查源（国内优先）：
+          1. jsDelivr CDN（国内有节点，速度快）
+          2. GitHub Releases API（备用）
+
+        Args:
+            force: True = 手动检查（忽略缓存），False = 静默检查（24h 缓存）
+        """
+        cache_dir = os.path.join(os.path.expanduser("~"), ".invoice_renamer")
+        cache_file = os.path.join(cache_dir, "update_cache.json")
+
+        # 静默检查时读缓存
+        if not force:
+            try:
+                os.makedirs(cache_dir, exist_ok=True)
+                if os.path.exists(cache_file):
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        cache = json.load(f)
+                    if time.time() - cache.get("ts", 0) < 86400:
+                        return cache.get("result", {"current": APP_VERSION})
+            except Exception:
+                pass
+
+        result = {"current": APP_VERSION}
+        errors = []
+
+        # 源 1：jsDelivr CDN（国内优先）
+        # jsDelivr 缓存约 12h，但 CDN 边缘节点更新较快
+        jsdelivr_url = "https://cdn.jsdelivr.net/gh/simple-ty/InvoiceRenamer@main/version.json"
+        try:
+            req = urllib.request.Request(jsdelivr_url, headers={"User-Agent": "InvoiceRenamer/" + APP_VERSION})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            tag = data.get("version", "")
+            if tag:
+                result["latest"] = tag
+                result["url"] = data.get("url", "https://github.com/simple-ty/InvoiceRenamer/releases")
+                result["release_notes"] = data.get("release_notes", "")
+                result["has_update"] = _version_newer(tag, APP_VERSION)
+                result["source"] = "jsdelivr"
+        except Exception as e:
+            errors.append(f"jsDelivr: {e}")
+
+        # 源 2：GitHub Releases API（备用，支持代理）
+        if "latest" not in result:
+            try:
+                req = urllib.request.Request(
+                    "https://api.github.com/repos/simple-ty/InvoiceRenamer/releases/latest",
+                    headers={
+                        "User-Agent": "InvoiceRenamer/" + APP_VERSION,
+                        "Accept": "application/vnd.github+json",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                tag = data.get("tag_name", "")
+                if tag:
+                    result["latest"] = tag
+                    result["url"] = data.get("html_url", "")
+                    result["release_notes"] = data.get("body", "")
+                    result["has_update"] = _version_newer(tag, APP_VERSION)
+                    result["source"] = "github"
+            except Exception as e:
+                errors.append(f"GitHub: {e}")
+
+        if "latest" not in result:
+            result["error"] = "; ".join(errors) if errors else "所有检查源均不可用"
+
+        # 写缓存（手动强制检查也更新缓存）
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump({"ts": time.time(), "result": result}, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+        return result
+
 
 # ── HTTP 服务器 ──────────────────────────────────────────────────────────
 
@@ -580,6 +676,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(self.api.export_excel())
         elif path == "/api/clear_source":
             self._json(self.api.clear_source())
+        elif path == "/api/check_update":
+            force = self._query_param("force", "0") == "1"
+            self._json(self.api.check_update(force=force))
         else:
             self.send_error(404)
 
@@ -618,6 +717,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(self.api.open_browser(params))
         else:
             self.send_error(404)
+
+    def _query_param(self, key: str, default: str = "") -> str:
+        """从 URL query string 提取参数。"""
+        import urllib.parse as _up
+        qs = _up.urlparse(self.path).query
+        params = _up.parse_qs(qs)
+        vals = params.get(key, [default])
+        return vals[0] if vals else default
 
     def _json(self, data):
         b = json.dumps(data, ensure_ascii=False).encode("utf-8")

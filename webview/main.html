@@ -13,6 +13,7 @@
       <div class="header-left">
         <h1 class="title">Invoice Renamer</h1>
         <span class="subtitle">发票批量识别、预览、导出、重命名。</span>
+        <button class="check-update-btn" id="check-update-btn" title="检查更新">检查更新</button>
       </div>
       <div class="header-right">
         <div class="source-box">
@@ -21,6 +22,13 @@
         </div>
       </div>
     </header>
+
+    <!-- 版本更新提示条 -->
+    <div class="update-banner" id="update-banner">
+      <span class="update-text">发现新版本 <strong id="update-version"></strong>，建议升级</span>
+      <a class="update-link" id="update-link" href="#">查看详情 →</a>
+      <button class="update-close" id="update-close">✕</button>
+    </div>
 
     <!-- 中间内容区 -->
     <main class="content">

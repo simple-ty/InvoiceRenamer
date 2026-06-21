@@ -94,6 +94,7 @@ async function init() {
     bindEvents();
     startPolling();
     updateStatus("就绪");
+    checkUpdate();  // 静默检查更新
   } catch (e) {
     showToast("初始化失败", e.message, "error");
     updateStatus("初始化失败");
@@ -151,6 +152,17 @@ function bindEvents() {
   });
   $("secret-id-input").addEventListener("input", updateSwitchState);
   $("secret-key-input").addEventListener("input", updateSwitchState);
+
+  $("update-close").addEventListener("click", () => {
+    $("update-banner").classList.remove("show");
+  });
+  $("update-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    apiPost("open_browser", { url: $("update-link").href });
+  });
+
+  // 手动检查更新按钮
+  $("check-update-btn").addEventListener("click", () => checkUpdate(true));
 
   $("settings-overlay").addEventListener("click", (e) => {
     if (e.target === $("settings-overlay")) closeCloudSettings();
@@ -690,6 +702,48 @@ function debounce(fn, delay) {
     clearTimeout(timer);
     timer = setTimeout(() => fn.apply(this, args), delay);
   };
+}
+
+// ── 版本更新检查 ──────────────────────────────────────────────────────
+
+async function checkUpdate(force = false) {
+  const btn = $("check-update-btn");
+  if (force) {
+    btn.disabled = true;
+    btn.textContent = "检查中…";
+    btn.classList.add("checking");
+  }
+
+  try {
+    const query = force ? "?force=1" : "";
+    const result = await apiGet("check_update" + query);
+
+    if (result && result.has_update) {
+      $("update-version").textContent = result.latest;
+      $("update-link").href = result.url || "https://github.com/simple-ty/InvoiceRenamer/releases";
+      $("update-banner").classList.add("show");
+    }
+
+    // 手动检查显示结果
+    if (force) {
+      if (result && result.has_update) {
+        showToast("发现新版本", result.latest + "，点击上方提示条查看详情");
+      } else if (result && result.error) {
+        showToast("检查失败", result.error, "error");
+      } else {
+        showToast("已是最新版本", result.current);
+      }
+    }
+  } catch (e) {
+    if (force) showToast("检查失败", "网络不可用，请稍后重试", "error");
+  } finally {
+    if (force) {
+      btn.disabled = false;
+      btn.textContent = "检查更新";
+      btn.classList.remove("checking");
+      setTimeout(() => { btn.blur(); }, 200);
+    }
+  }
 }
 
 // ── 启动 ────────────────────────────────────────────────────────────────
