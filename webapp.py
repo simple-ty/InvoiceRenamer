@@ -290,6 +290,9 @@ class Api:
         return any(fields.get(k) for k in ("date", "type", "number", "buyer", "seller", "amount"))
 
     def _build_target_name(self, record: dict) -> str:
+        # 只有 complete / partial 才拼新名字，其余状态保留原名
+        if record.get("status") not in ("complete", "partial"):
+            return record["current_name"]
         try:
             ext = os.path.splitext(record["path"])[1].lower() or ".pdf"
             return build_name(record["fields"], self.field_enabled,

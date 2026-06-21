@@ -24,7 +24,7 @@ const STAT_STYLE = {
   partial: { title: "部分识别", accent: "#FA9D3B" },
   failed: { title: "未识别/异常", accent: "#FA5151" },
   not_invoice: { title: "非发票", accent: "#B0B0B0" },
-  cloud_not_configured: { title: "云端未配置", accent: "#3FA9F5" },
+  cloud_not_configured: { title: "云端未启用", accent: "#3FA9F5" },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -285,11 +285,12 @@ function renderTable(records) {
     const statusText = {
       complete: "完整识别", partial: "部分识别",
       failed: "解析失败", cloud_error: "云端异常",
-      not_invoice: "非发票", cloud_not_configured: "云端未配置",
+      not_invoice: "非发票", cloud_not_configured: "云端未启用",
     }[r.status] || r.status;
     const rowClass = ["failed", "cloud_error"].includes(r.status) ? "row-error"
       : r.status === "not_invoice" ? "row-weak"
       : r.status === "cloud_not_configured" ? "row-info"
+      : r.status === "partial" ? "row-warning"
       : "";
     row.innerHTML = `
       <div class="td col-idx">${r.idx}</div>

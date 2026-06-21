@@ -565,6 +565,9 @@ button, input {
 .table-row.row-info { background: #EDF4FF; }
 .table-row.row-info:hover { background: #DDE9FA; }
 
+.table-row.row-warning { background: #FFF8E7; }
+.table-row.row-warning:hover { background: #FFF0D0; }
+
 .td {
   padding: 4px 8px;
   overflow: hidden;
@@ -577,11 +580,13 @@ button, input {
 .td.col-amount { text-align: center; justify-content: center; }
 .td.col-status { text-align: center; justify-content: center; }
 
-.td.success { color: var(--text-primary); }
-.td.partial { color: var(--warning); }
-.td.error { color: var(--danger); }
-.td.idle { color: var(--text-muted); }
-.td.not-invoice { color: #B0B0B0; }
+/* 状态列颜色 — 选择器对齐 status 值 */
+.td.complete { color: #07C160; }
+.td.partial { color: #FA9D3B; }
+.td.failed,
+.td.cloud_error { color: #FA5151; }
+.td.not_invoice { color: #B0B0B0; }
+.td.cloud_not_configured { color: #3FA9F5; }
 
 .empty-tip {
   display: flex;

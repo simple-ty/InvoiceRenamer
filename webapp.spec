@@ -55,7 +55,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name=f'InvoiceRenamer_WebView_{APP_VERSION}',
+    name=f'InvoiceRenamer_{APP_VERSION}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
