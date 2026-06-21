@@ -290,12 +290,14 @@ function renderTable(records) {
     row.className = "table-row";
     row.dataset.idx = r.idx;
     row.dataset.status = r.status;
-    const statusText = {
-      complete: "完整识别", partial: "部分识别",
-      failed: "解析失败", cloud_error: "云端异常",
-      not_invoice: "非发票", cloud_not_configured: "云端未启用",
-    }[r.status] || r.status;
-    const rowClass = ["failed", "cloud_error"].includes(r.status) ? "row-error"
+    const statusText = r.manual_override ? "手动重命名"
+      : { complete: "完整识别", partial: "部分识别",
+          failed: "解析失败", cloud_error: "云端异常",
+          not_invoice: "非发票", cloud_not_configured: "云端未启用",
+        }[r.status] || r.status;
+    const statusClass = r.manual_override ? "manual_rename" : r.status;
+    const rowClass = r.manual_override ? ""
+      : ["failed", "cloud_error"].includes(r.status) ? "row-error"
       : r.status === "not_invoice" ? "row-weak"
       : r.status === "cloud_not_configured" ? "row-info"
       : r.status === "partial" ? "row-warning"
@@ -315,7 +317,7 @@ function renderTable(records) {
       <div class="td col-type">${esc(r.type)}</div>
       <div class="td col-seller" title="${esc(r.seller)}">${esc(r.seller)}</div>
       <div class="td col-amount">${esc(r.amount)}</div>
-      <div class="td col-status ${r.status}">${esc(statusText)}</div>
+      <div class="td col-status ${statusClass}">${esc(statusText)}</div>
     `;
     if (rowClass) row.classList.add(rowClass);
     tbody.appendChild(row);

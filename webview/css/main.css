@@ -545,7 +545,7 @@ button, input {
 .table-row {
   display: flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 30px;
   border-bottom: 1px solid #F0F0F0;
   font-size: 13px;
 }
@@ -587,13 +587,14 @@ button, input {
 .td.cloud_error { color: #FA5151; }
 .td.not_invoice { color: #B0B0B0; }
 .td.cloud_not_configured { color: #3FA9F5; }
+.td.manual_rename { color: #534AB7; }
 
 /* 手动编辑文件名 */
 .editable-cell { position: relative; cursor: default; }
 .edit-icon {
   position: absolute; top: 2px; right: 4px;
-  background: #EEE9FE; padding: 0 5px; border-radius: 3px;
-  font-size: 11px; color: #534AB7; cursor: pointer; line-height: 16px;
+  background: #EEE9FE; padding: 2px 8px; border-radius: 3px;
+  font-size: 13px; color: #534AB7; cursor: pointer; line-height: 18px;
   opacity: 0; transition: opacity 0.15s;
 }
 .editable-cell:hover .edit-icon { opacity: 1; }
@@ -605,7 +606,7 @@ button, input {
   padding: 2px 4px; display: flex; gap: 4px; align-items: center;
 }
 .edit-input {
-  flex: 1; height: 24px; border: 1px solid #534AB7; border-radius: 4px;
+  flex: 1; height: 26px; border: 1px solid #534AB7; border-radius: 4px;
   padding: 0 6px; font-size: 13px; font-family: var(--font-family);
   outline: none; background: #FFF; min-width: 0;
 }
