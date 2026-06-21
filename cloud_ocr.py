@@ -120,10 +120,12 @@ def _load_config() -> dict:
 
 
 def _save_config(config: dict) -> None:
-    """保存配置文件。"""
+    """保存配置文件（原子写入，避免中途崩溃损坏文件）。"""
     _ensure_config_dir()
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+    tmp = CONFIG_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, CONFIG_FILE)
 
 
 def save_credentials(secret_id: str, secret_key: str, enabled: bool = False) -> None:
@@ -341,29 +343,23 @@ def _recognize_image_base64(image_base64: str, secret_id: str, secret_key: str) 
 # ── 响应解析 ──────────────────────────────────────────────────────────────
 
 def _normalize_type(raw_type: str) -> str:
-    """将腾讯云返回的发票类型名简化为本工具的统一格式。
-
-    映射规则：
-        电子发票(普通发票)          → 电子普票
-        电子发票(增值税专用发票)     → 增值税专票
-        电子发票(铁路电子客票)       → 铁路电子客票
-        增值税电子普通发票           → 增值税普票
-        增值税专用发票               → 增值税专票
-        增值税普通发票               → 增值税普票
-        全电发票(普通) / 全电普通发票 → 全电普票
-        全电发票(专用) / 全电专用发票 → 全电专票
-    """
+    """将腾讯云返回的发票类型名简化为本工具的统一格式。"""
     if "铁路" in raw_type or "客票" in raw_type:
         return "铁路电子客票"
-    if "专用发票" in raw_type or "专票" in raw_type:
-        return "增值税专票"
-    if "增值税" in raw_type or "增值税普通" in raw_type:
-        return "增值税普票"
-    if "普通发票" in raw_type or "电子发票" in raw_type:
-        return "电子普票"
     if "全电" in raw_type:
         return "全电普票" if "普通" in raw_type else "全电专票"
-    # 兜底：保留原始值
+    if "专用发票" in raw_type or "专票" in raw_type:
+        return "增值税专票"
+    if "普通发票" in raw_type:
+        if "增值税" in raw_type:
+            return "增值税普票"
+        if "电子" in raw_type:
+            return "电子普票"
+        return "普通发票"
+    if "增值税" in raw_type:
+        return "增值税普票"
+    if "电子发票" in raw_type:
+        return "电子普票"
     return raw_type
 
 

@@ -61,7 +61,7 @@ exe = EXE(
     strip=False,
     upx=False,
     upx_exclude=[],
-    runtime_tmpdir=None,
+    runtime_tmpdir=r"%LOCALAPPDATA%\InvoiceRenamer\runtime",
     console=False,
     icon='icon.ico',
 )

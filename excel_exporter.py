@@ -2,35 +2,27 @@
 
 import os
 from datetime import date, datetime
-from tkinter import filedialog, messagebox
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 
-def export_invoice_excel(records: list, parent_window=None) -> bool:
-    """
-    将发票记录导出为 Excel 文件。
+def generate_default_filename() -> str:
+    return f"{date.today().strftime('%Y.%m.%d')}_报销明细.xlsx"
 
-    records       : list of dict，每条包含 'fields' 键
-    parent_window : 文件对话框的父窗口（可选）
 
-    返回 True（成功）/ False（取消或失败）
+def save_invoice_excel(records: list, output_path: str) -> str:
+    """将发票记录导出为 Excel 文件（纯逻辑，无 UI 依赖）。
+
+    Args:
+        records: 发票记录列表
+        output_path: 输出文件路径
+
+    Returns:
+        成功时返回 output_path
     """
     if not records:
-        messagebox.showwarning("提示", "没有可导出的发票记录。", parent=parent_window)
-        return False
-
-    default_name = f"{date.today().strftime('%Y.%m.%d')}_报销明细.xlsx"
-    output_path = filedialog.asksaveasfilename(
-        title="保存 Excel 文件",
-        initialfile=default_name,
-        defaultextension=".xlsx",
-        filetypes=[("Excel 文件", "*.xlsx")],
-        parent=parent_window,
-    )
-    if not output_path:
-        return False
+        raise ValueError("没有可导出的发票记录")
 
     # ── 样式定义 ──────────────────────────────────────────────────
     thin = Side(style="thin", color="000000")
@@ -77,12 +69,7 @@ def export_invoice_excel(records: list, parent_window=None) -> bool:
     _write_total_row(sheet, len(records) + 2, total_amount, border, center, total_font)
 
     workbook.save(output_path)
-    messagebox.showinfo(
-        "导出成功",
-        f"共导出 {len(records)} 条发票记录\n文件: {os.path.basename(output_path)}",
-        parent=parent_window,
-    )
-    return True
+    return output_path
 
 
 # ---------------------------------------------------------------------------

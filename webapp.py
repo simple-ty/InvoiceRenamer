@@ -31,7 +31,7 @@ from config import (
 )
 from invoice_parser import parse_invoice, parse_image_cloud
 from name_builder import build_name, ensure_unique_name
-from excel_exporter import export_invoice_excel
+from excel_exporter import save_invoice_excel, generate_default_filename
 
 
 def resource_path(relative_path: str) -> str:
@@ -115,10 +115,12 @@ class Api:
         total = len(self.records)
         complete = sum(1 for r in self.records if r.get("status") == "complete")
         partial = sum(1 for r in self.records if r.get("status") == "partial")
-        failed = sum(1 for r in self.records if r.get("status") == "failed")
+        failed = sum(1 for r in self.records if r.get("status") in ("failed", "cloud_error"))
         not_invoice = sum(1 for r in self.records if r.get("status") == "not_invoice")
+        cloud_nc = sum(1 for r in self.records if r.get("status") == "cloud_not_configured")
         return {"total": total, "complete": complete, "partial": partial,
-                "failed": failed, "not_invoice": not_invoice}
+                "failed": failed, "not_invoice": not_invoice,
+                "cloud_not_configured": cloud_nc}
 
     def _serialize_records(self) -> list[dict]:
         out = []
@@ -145,7 +147,8 @@ class Api:
             win = self.window or (webview.windows[0] if webview.windows else None)
             if not win:
                 return {"ok": False, "error": "窗口未就绪"}
-            result = win.create_file_dialog(webview.FOLDER_DIALOG)
+            folder_dlg = webview.FileDialog.FOLDER if hasattr(webview, "FileDialog") else webview.FOLDER_DIALOG
+            result = win.create_file_dialog(folder_dlg)
             if not result:
                 return {"ok": False}
             folder = result[0] if isinstance(result, (list, tuple)) else result
@@ -167,8 +170,9 @@ class Api:
             win = self.window or (webview.windows[0] if webview.windows else None)
             if not win:
                 return {"ok": False, "error": "窗口未就绪"}
+            open_dlg = webview.FileDialog.OPEN if hasattr(webview, "FileDialog") else webview.OPEN_DIALOG
             result = win.create_file_dialog(
-                webview.OPEN_DIALOG,
+                open_dlg,
                 allow_multiple=True,
                 file_types=(
                     "发票文件 (*.pdf;*.jpg;*.jpeg;*.png;*.bmp;*.tiff)",
@@ -219,29 +223,44 @@ class Api:
                             parsed = parse_image_cloud(
                                 path, self._cloud_secret_id, self._cloud_secret_key)
                         else:
-                            parsed = {"fields": {}, "error": "需启用云端OCR", "not_invoice": True}
+                            parsed = {"fields": {}, "error": "云端未配置", "not_invoice": False,
+                                      "_status": "cloud_not_configured"}
                     else:
                         parsed = {"fields": {}, "error": "不支持的类型", "not_invoice": True}
 
                     fields = parsed.get("fields", {})
                     err = parsed.get("error", "")
                     not_inv = parsed.get("not_invoice", False)
+                    force_status = parsed.get("_status", "")
 
                     current_name = os.path.basename(path)
                     record = {
                         "path": path, "source_name": current_name,
                         "current_name": current_name, "new_name": current_name,
-                        "fields": fields,
+                        "fields": fields, "status": "", "error": err,
                     }
-                    if not_inv:
+
+                    # 状态判定（优先级从高到低）
+                    if force_status == "cloud_not_configured":
+                        record["status"] = "cloud_not_configured"
+                    elif not_inv and ("云端" in err or "API" in err or "额度" in err):
+                        record["status"] = "cloud_error"
+                    elif not_inv:
                         record["status"] = "not_invoice"
                         record["error"] = err or "非发票"
-                    elif err or not self._has_required_fields(fields):
+                    elif err:
+                        # 有错误但可能是部分识别
+                        if self._has_some_fields(fields):
+                            record["status"] = "partial"
+                        else:
+                            record["status"] = "failed"
+                    elif self._has_required_fields(fields):
+                        record["status"] = "complete"
+                    elif self._has_some_fields(fields):
+                        record["status"] = "partial"
+                    else:
                         record["status"] = "failed"
                         record["error"] = err or "识别失败"
-                    else:
-                        record["status"] = "complete"
-                        record["error"] = ""
                     record["new_name"] = self._build_target_name(record)
                     records.append(record)
                 except Exception as e:
@@ -258,7 +277,7 @@ class Api:
             self._emit("scan_finished", {
                 "records": self._serialize_records(),
                 "stats": self._calc_stats(),
-                "message": f"识别完成，共 {len(records)} 个文件",
+                "message": "识别完成",
             })
 
         threading.Thread(target=worker, daemon=True).start()
@@ -266,6 +285,9 @@ class Api:
 
     def _has_required_fields(self, fields: dict) -> bool:
         return bool(fields.get("type")) and (bool(fields.get("amount")) or bool(fields.get("date")))
+
+    def _has_some_fields(self, fields: dict) -> bool:
+        return any(fields.get(k) for k in ("date", "type", "number", "buyer", "seller", "amount"))
 
     def _build_target_name(self, record: dict) -> str:
         try:
@@ -347,16 +369,17 @@ class Api:
 
             self.rename_history.extend(history)
             self.processing = False
+            msg = "重命名完成"
+            err_detail = ""
             if errors:
-                with open("rename_errors.log", "w", encoding="utf-8") as f:
-                    f.write("\n---\n".join(errors))
-                msg = "重命名完成，部分失败详见 rename_errors.log"
-            else:
-                msg = "重命名完成"
+                msg = f"重命名部分失败，{failed} 个文件出错"
+                err_detail = msg
             self._emit("rename_finished", {
                 "records": self._serialize_records(),
                 "stats": self._calc_stats(),
-                "message": msg, "can_undo": bool(self.rename_history)})
+                "message": msg, "can_undo": bool(self.rename_history),
+                "error_detail": err_detail,
+            })
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -391,8 +414,10 @@ class Api:
             self._emit("undo_finished", {
                 "records": self._serialize_records(),
                 "stats": self._calc_stats(),
-                "message": "撤销完成" if failed == 0 else "撤销完成，部分文件已不存在",
-                "can_undo": False})
+                "message": "撤销完成",
+                "can_undo": False,
+                "error_detail": "撤销部分失败，部分文件已不存在" if failed else "",
+            })
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -402,7 +427,18 @@ class Api:
         try:
             if not self.records:
                 return {"ok": False, "error": "没有可导出的数据"}
-            path = export_invoice_excel(self.records)
+            import webview
+            win = self.window or (webview.windows[0] if webview.windows else None)
+            if not win:
+                return {"ok": False, "error": "窗口未就绪"}
+            result = win.create_file_dialog(
+                webview.FileDialog.SAVE if hasattr(webview, "FileDialog") else webview.SAVE_DIALOG,
+                save_filename=generate_default_filename(),
+            )
+            if not result:
+                return {"ok": False, "error": "已取消"}
+            path = result if isinstance(result, str) else result[0]
+            save_invoice_excel(self.records, path)
             return {"ok": True, "path": path}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -486,14 +522,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(self.api.get_cloud_settings())
         elif path == "/api/clear_cloud_settings":
             self._json(self.api.clear_cloud_settings())
-        elif path == "/api/toggle_cloud_enabled":
-            self._json(self.api.toggle_cloud_enabled())
         elif path == "/api/export_excel":
             self._json(self.api.export_excel())
         elif path == "/api/clear_source":
             self._json(self.api.clear_source())
-        elif path == "/api/on_rename_button_click":
-            self._json(self.api.on_rename_button_click())
         else:
             self.send_error(404)
 
@@ -516,6 +548,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(self.api.scan_files())
         elif path == "/api/update_template":
             self._json(self.api.update_template(params))
+        elif path == "/api/toggle_cloud_enabled":
+            self._json(self.api.toggle_cloud_enabled())
+        elif path == "/api/on_rename_button_click":
+            self._json(self.api.on_rename_button_click())
         elif path == "/api/set_preview_mode":
             self._json(self.api.set_preview_mode(params))
         elif path == "/api/save_cloud_settings":

@@ -24,6 +24,7 @@ const STAT_STYLE = {
   partial: { title: "部分识别", accent: "#FA9D3B" },
   failed: { title: "未识别/异常", accent: "#FA5151" },
   not_invoice: { title: "非发票", accent: "#B0B0B0" },
+  cloud_not_configured: { title: "云端未配置", accent: "#3FA9F5" },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -89,14 +90,20 @@ async function init() {
     updateCloudButton();
     updateRenameButton();
     updatePreviewSwitch();
+    syncCustomInputState();
     bindEvents();
     startPolling();
     updateStatus("就绪");
   } catch (e) {
-    $("summary-text").textContent = "初始化失败: " + e.message;
-    updateStatus("初始化失败: " + e.message);
+    showToast("初始化失败", e.message, "error");
+    updateStatus("初始化失败");
     state._initialized = false;
-    setTimeout(() => init(), 1000);
+    state._initAttempts = (state._initAttempts || 0) + 1;
+    if (state._initAttempts < 10) {
+      setTimeout(() => init(), 1000);
+    } else {
+      updateStatus("初始化失败，请重启程序");
+    }
   }
 }
 
@@ -173,6 +180,7 @@ function renderTemplateRows() {
     const checkbox = row.querySelector(".row-checkbox");
     checkbox.addEventListener("change", () => {
       state.fieldEnabled[key] = checkbox.checked;
+      if (key === "custom") syncCustomInputState();
       updateTemplate();
     });
     row.addEventListener("dragstart", onDragStart);
@@ -198,6 +206,13 @@ function onDrop(e) {
   state.fieldOrder.splice(toIdx, 0, dragKey);
   renderTemplateRows();
   updateTemplate();
+}
+
+function syncCustomInputState() {
+  const input = $("custom-input");
+  const enabled = state.fieldEnabled.custom === true;
+  input.disabled = !enabled;
+  if (!enabled) input.value = "";
 }
 
 async function updateTemplate() {
@@ -268,18 +283,24 @@ function renderTable(records) {
     row.className = "table-row";
     row.dataset.idx = r.idx;
     const statusText = {
-      complete: "完成", partial: "部分", failed: r.error || "未识别",
-      not_invoice: "非发票", idle: "待处理",
+      complete: "完整识别", partial: "部分识别",
+      failed: "解析失败", cloud_error: "云端异常",
+      not_invoice: "非发票", cloud_not_configured: "云端未配置",
     }[r.status] || r.status;
+    const rowClass = ["failed", "cloud_error"].includes(r.status) ? "row-error"
+      : r.status === "not_invoice" ? "row-weak"
+      : r.status === "cloud_not_configured" ? "row-info"
+      : "";
     row.innerHTML = `
-      <div class="td col-idx ${r.status}">${r.idx}</div>
-      <div class="td col-org ${r.status}" title="${esc(r.source_name)}">${esc(r.source_name)}</div>
-      <div class="td col-new ${r.status}" title="${esc(r.new_name)}">${esc(r.new_name)}</div>
-      <div class="td col-type ${r.status}">${esc(r.type)}</div>
-      <div class="td col-seller ${r.status}" title="${esc(r.seller)}">${esc(r.seller)}</div>
-      <div class="td col-amount ${r.status}">${esc(r.amount)}</div>
+      <div class="td col-idx">${r.idx}</div>
+      <div class="td col-org" title="${esc(r.source_name)}">${esc(r.source_name)}</div>
+      <div class="td col-new" title="${esc(r.new_name)}">${esc(r.new_name)}</div>
+      <div class="td col-type">${esc(r.type)}</div>
+      <div class="td col-seller" title="${esc(r.seller)}">${esc(r.seller)}</div>
+      <div class="td col-amount">${esc(r.amount)}</div>
       <div class="td col-status ${r.status}">${esc(statusText)}</div>
     `;
+    if (rowClass) row.classList.add(rowClass);
     tbody.appendChild(row);
   });
 }
@@ -307,7 +328,9 @@ function sortTable(col) {
 function renderStats(stats) {
   const container = $("stats-area");
   container.innerHTML = "";
-  ["total", "complete", "partial", "failed", "not_invoice"].forEach(key => {
+  ["total", "complete", "partial", "failed", "not_invoice", "cloud_not_configured"].forEach(key => {
+    const count = stats[key] || 0;
+    if (key === "cloud_not_configured" && count === 0) return;  // 无需要时不显示
     const style = STAT_STYLE[key];
     const chip = document.createElement("div");
     chip.className = "stat-chip";
@@ -350,11 +373,11 @@ function updateRenameButton() {
 
 async function onRenameClick() {
   if (state.renameHistory) {
-    apiGet("on_rename_button_click");
+    apiPost("on_rename_button_click");
     state.processing = true;
     updateStatus("撤销中...");
   } else {
-    apiGet("on_rename_button_click");
+    apiPost("on_rename_button_click");
     state.processing = true;
     updateStatus("重命名中...");
   }
@@ -363,8 +386,24 @@ async function onRenameClick() {
 
 async function exportExcel() {
   const result = await apiGet("export_excel");
-  if (result && result.ok) updateStatus("已导出: " + result.path);
-  else updateStatus(result?.error || "导出失败");
+  if (result && result.ok) {
+    showToast("导出成功", result.path);
+    updateStatus("导出成功");
+  } else {
+    showToast("导出失败", result?.error || "导出失败", "error");
+    updateStatus("导出失败");
+  }
+}
+
+function showToast(title, sub, type) {
+  type = type || "success";
+  $("toast-title").textContent = title;
+  $("toast-sub").textContent = sub || "";
+  var toast = $("toast");
+  toast.className = "toast " + type;
+  toast.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(function () { toast.classList.remove("show"); }, 4000);
 }
 
 // ── 云端 OCR 设置 ───────────────────────────────────────────────────────
@@ -444,7 +483,7 @@ function toggleSecretKeyVisibility() {
 }
 
 async function toggleCloudEnabled() {
-  const result = await apiGet("toggle_cloud_enabled");
+  const result = await     apiPost("toggle_cloud_enabled");;
   if (result && result.ok) {
     state.cloud = result.cloud;
     updateCloudButton();
@@ -505,6 +544,7 @@ window.__onPyEvent__ = function(payload) {
       state.renameHistory = data.can_undo;
       renderTable(state.records); renderStats(data.stats || {});
       setProgress(1); updateStatus(data.message || "重命名完成");
+      if (data.error_detail) showToast("重命名部分失败", data.error_detail, "error");
       updateRenameButton(); break;
     case "undo_started":
       state.processing = true; updateStatus("撤销中..."); updateRenameButton(); break;
@@ -512,7 +552,9 @@ window.__onPyEvent__ = function(payload) {
       state.processing = false; state.records = data.records || state.records;
       state.renameHistory = data.can_undo;
       renderTable(state.records); renderStats(data.stats || {});
-      updateStatus(data.message || "撤销完成"); updateRenameButton(); break;
+      updateStatus(data.message || "撤销完成");
+      if (data.error_detail) showToast("撤销部分失败", data.error_detail, "error");
+      updateRenameButton(); break;
     case "status": updateStatus(data.message || ""); break;
   }
 };
@@ -541,6 +583,7 @@ function applyState(newState) {
   renderStats(newState.stats || {});
   updateCloudButton();
   updateRenameButton();
+  syncCustomInputState();
 }
 
 // ── 工具函数 ────────────────────────────────────────────────────────────

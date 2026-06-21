@@ -104,7 +104,7 @@ button, input {
 }
 
 .path-input {
-  width: 360px;
+  width: 420px;
   min-width: 360px;
   max-width: 560px;
   height: 32px;
@@ -334,6 +334,11 @@ button, input {
 .custom-input:focus {
   border-color: var(--primary);
 }
+.custom-input:disabled {
+  background: var(--gray-bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
 
 .custom-hint {
   font-size: var(--font-subtitle);
@@ -550,6 +555,15 @@ button, input {
 .table-row:last-child {
   border-bottom: none;
 }
+
+/* 行级状态色 */
+.table-row.row-error { background: #FFF0F0; }
+.table-row.row-error:hover { background: #FFE4E4; }
+.table-row.row-weak { background: #F5F5F5; }
+.table-row.row-weak:hover { background: #ECECEC; }
+.table-row.row-weak .td { color: #888; }
+.table-row.row-info { background: #EDF4FF; }
+.table-row.row-info:hover { background: #DDE9FA; }
 
 .td {
   padding: 4px 8px;
@@ -802,6 +816,7 @@ button, input {
 }
 .switch-title {
   font-size: var(--font-body);
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 2px;
 }
@@ -986,4 +1001,67 @@ button, input {
   font-size: var(--font-hint);
   color: var(--text-hint);
   margin-bottom: 0;
+}
+
+/* ── Toast 通知 ─────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 14px 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+}
+.toast.error {
+  border-color: var(--danger);
+}
+.toast-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--primary);
+}
+.toast.error .toast-icon {
+  background: var(--danger);
+}
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.toast-title {
+  font-size: var(--font-body);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.toast-sub {
+  font-size: var(--font-hint);
+  color: var(--text-secondary);
+  margin-top: 2px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
